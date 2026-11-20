@@ -6,25 +6,25 @@
 --  All rights reserved.
 --                                     http://www.ohnaka.jp/ese-vdp/
 --
---  �{�\�t�g�E�F�A����і{�\�t�g�E�F�A�Ɋ�Â��č쐬���ꂽ�h�����́A�ȉ��̏�����
---  �������ꍇ�Ɍ���A�ĔЕz����юg�p��������܂��B
+--  本ソフトウェアおよび本ソフトウェアに基づいて作成された派生物は、以下の条件を
+--  満たす場合に限り、再頒布および使用が許可されます。
 --
---  1.�\�[�X�R�[�h�`���ōĔЕz����ꍇ�A��L�̒��쌠�\���A�{�����ꗗ�A����щ��L
---    �Ɛӏ��������̂܂܂̌`�ŕێ����邱�ƁB
---  2.�o�C�i���`���ōĔЕz����ꍇ�A�Еz���ɕt���̃h�L�������g���̎����ɁA��L��
---    ���쌠�\���A�{�����ꗗ�A����щ��L�Ɛӏ������܂߂邱�ƁB
---  3.���ʂɂ�鎖�O�̋��Ȃ��ɁA�{�\�t�g�E�F�A��̔��A����я��ƓI�Ȑ��i�⊈��
---    �Ɏg�p���Ȃ����ƁB
+--  1.ソースコード形式で再頒布する場合、上記の著作権表示、本条件一覧、および下記
+--    免責条項をそのままの形で保持すること。
+--  2.バイナリ形式で再頒布する場合、頒布物に付属のドキュメント等の資料に、上記の
+--    著作権表示、本条件一覧、および下記免責条項を含めること。
+--  3.書面による事前の許可なしに、本ソフトウェアを販売、および商業的な製品や活動
+--    に使用しないこと。
 --
---  �{�\�t�g�E�F�A�́A���쌠�҂ɂ���āu����̂܂܁v�񋟂���Ă��܂��B���쌠�҂́A
---  ����ړI�ւ̓K�����̕ۏ؁A���i���̕ۏ؁A�܂�����Ɍ��肳��Ȃ��A�����Ȃ閾��
---  �I�������͈ÖقȕۏؐӔC�������܂���B���쌠�҂́A���R�̂�������킸�A���Q
---  �����̌�����������킸�A���ӔC�̍������_��ł��邩���i�ӔC�ł��邩�i�ߎ�
---  ���̑��́j�s�@�s�ׂł��邩���킸�A���ɂ��̂悤�ȑ��Q����������\����m��
---  ����Ă����Ƃ��Ă��A�{�\�t�g�E�F�A�̎g�p�ɂ���Ĕ��������i��֕i�܂��͑�p�T
---  �[�r�X�̒��B�A�g�p�̑r���A�f�[�^�̑r���A���v�̑r���A�Ɩ��̒��f���܂߁A�܂���
---  ��Ɍ��肳��Ȃ��j���ڑ��Q�A�Ԑڑ��Q�A�����I�ȑ��Q�A���ʑ��Q�A�����I���Q�A��
---  ���͌��ʑ��Q�ɂ��āA��ؐӔC�𕉂�Ȃ����̂Ƃ��܂��B
+--  本ソフトウェアは、著作権者によって「現状のまま」提供されています。著作権者は、
+--  特定目的への適合性の保証、商品性の保証、またそれに限定されない、いかなる明示
+--  的もしくは暗黙な保証責任も負いません。著作権者は、事由のいかんを問わず、損害
+--  発生の原因いかんを問わず、かつ責任の根拠が契約であるか厳格責任であるか（過失
+--  その他の）不法行為であるかを問わず、仮にそのような損害が発生する可能性を知ら
+--  されていたとしても、本ソフトウェアの使用によって発生した（代替品または代用サ
+--  ービスの調達、使用の喪失、データの喪失、利益の喪失、業務の中断も含め、またそ
+--  れに限定されない）直接損害、間接損害、偶発的な損害、特別損害、懲罰的損害、ま
+--  たは結果損害について、一切責任を負わないものとします。
 --
 --  Note that above Japanese version license is the formal document.
 --  The following translation is only for reference.
@@ -68,7 +68,7 @@
 -------------------------------------------------------------------------------
 -- Memo
 --   Japanese comment lines are starts with "JP:".
---   JP: ���{��̃R�����g�s�� JP:�𓪂ɕt���鎖�ɂ���
+--   JP: 日本語のコメント行は JP:を頭に付ける事にする
 --
 -------------------------------------------------------------------------------
 -- Todo
@@ -108,67 +108,67 @@
 -- Add blink support to text 2 mode
 --
 -- 16th,Aug,2005 modified by Kazuhiro Tsujikawa
--- JP: TMS9918���[�h��VRAM�C���N�������g������14�r�b�g�Ɍ���
+-- JP: TMS9918モードでVRAMインクリメントを下位14ビットに限定
 --
 -- 08th,May,2005 modified by Kunihiko Ohnaka
--- JP: VGA�R���|�[�l���g��InerlaceMode�M����`����悤�ɂ���
+-- JP: VGAコンポーネントにInerlaceMode信号を伝えるようにした
 --
 -- 26th,April,2005 modified by Kazuhiro Tsujikawa
--- JP: VRAM�Ƃ̃f�[�^�o�X(pRamDbi/pRamDbo)��P�����o�X��(SDRAM�Ή�)
+-- JP: VRAMとのデータバス(pRamDbi/pRamDbo)を単方向バス化(SDRAM対応)
 --
 -- 08th,November,2004 modified by Kazuhiro Tsujikawa
--- JP: Vsync/Hsync���荞�ݏC���~�X����
+-- JP: Vsync/Hsync割り込み修正ミス訂正
 --
 -- 03rd,November,2004 modified by Kazuhiro Tsujikawa
--- JP: SCREEN6��ʎ��ӐF�C����MSX2�^�C�g�����S�Ή�
+-- JP: SCREEN6画面周辺色修正→MSX2タイトルロゴ対応
 --
 -- 19th,September,2004 modified by Kazuhiro Tsujikawa
--- JP: �p�^�[���l�[���e�[�u���̃}�X�N��������ANMA�f���Ή�
--- JP: MultiColorMode(SCREEN3)�������}�W���r�f���Ή�
+-- JP: パターンネームテーブルのマスクを実装→ANMAデモ対応
+-- JP: MultiColorMode(SCREEN3)実装→マジラビデモ対応
 --
 -- 12th,September,2004 modified by Kazuhiro Tsujikawa
--- JP: VdpR0DispNum�������C���P�ʂŔ��f���X�y�[�X�}���{�E�ł̃`���c�L�΍�
+-- JP: VdpR0DispNum等をライン単位で反映→スペースマンボウでのチラツキ対策
 --
 -- 11th,September,2004 modified by Kazuhiro Tsujikawa
--- JP: �����A�����荞�ݏC����MGSEL(�e���|������)�΍�
+-- JP: 水平帰線割り込み修正→MGSEL(テンポ早送り)対策
 --
 -- 22nd,August,2004 modified by Kazuhiro Tsujikawa
--- JP: �p���b�g��Read/Write�Փ˂��C�����K�[���ł̃`���c�L�΍�
+-- JP: パレットのRead/Write衝突を修正→ガゼルでのチラツキ対策
 --
 -- 21st,August,2004 modified by Kazuhiro Tsujikawa
--- JP: R#1/IE0(�����A�����荞�݋���)�̓�����C����GALAGA�΍�
+-- JP: R#1/IE0(垂直帰線割り込み許可)の動作を修正→GALAGA対策
 --
 -- 2nd,August,2004 modified by Kazuhiro Tsujikawa
--- JP: Screen7/8�ł̃X�v���C�g�ǂݍ��݃A�h���X���C����Snatcher�΍�
+-- JP: Screen7/8でのスプライト読み込みアドレスを修正→Snatcher対策
 --
 -- 31th,July,2004 modified by Kazuhiro Tsujikawa
--- JP: Screen7/8�ł�VRAM�ǂݍ��݃A�h���X���C����Snatcher�΍�
+-- JP: Screen7/8でのVRAM読み込みアドレスを修正→Snatcher対策
 --
 -- 24th,July,2004 modified by Kazuhiro Tsujikawa
--- JP: �X�v���C�g32�������\�����̗�����C��(248=256-8->preDotCounter_x_end)
+-- JP: スプライト32枚同時表示時の乱れを修正(248=256-8->preDotCounter_x_end)
 --
 -- 18th,July,2004 modified by Kazuhiro Tsujikawa
--- JP: Screen6�̃����_�����O�����쐬
+-- JP: Screen6のレンダリング部を作成
 --
 -- 17th,July,2004 modified by Kazuhiro Tsujikawa
--- JP: Screen7�̃����_�����O�����쐬
+-- JP: Screen7のレンダリング部を作成
 --
 -- 29th,June,2004 modified by Kazuhiro Tsujikawa
--- JP: Screen8�̃����_�����O�����C��
+-- JP: Screen8のレンダリング部を修正
 --
 -- 26th,June,2004 modified by Kazuhiro Tsujikawa
--- JP: WebPack�ŃR���p�C�������HMMC/LMMC/LMCM�����삵�Ȃ��s����C��
+-- JP: WebPackでコンパイルするとHMMC/LMMC/LMCMが動作しない不具合を修正
 -- JP: onehot sequencer(VdpCmdState) must be initialized by asyncronus reset
 --
 -- 22nd,June,2004 modified by Kazuhiro Tsujikawa
--- JP: R#1/IE0(�����A�����荞�݋���)�̓�����C��
--- JP: Ys2�Ńo�m�A�̉Ƃɓ����l�ɂȂ���
+-- JP: R#1/IE0(垂直帰線割り込み許可)の動作を修正
+-- JP: Ys2でバノアの家に入れる様になった
 --
 -- 13th,June,2004 modified by Kazuhiro Tsujikawa
--- JP: �g��X�v���C�g���E��1�h�b�g�����s����C��
--- JP: SCREEN5�ŃX�v���C�g�E�[32�h�b�g���\������Ȃ��s����C��
--- JP: SCREEN5��211���C��(�ŉ�)�̃X�v���C�g���\������Ȃ��s����C��
--- JP: ��ʏ����t���O(VdpR1DispOn)��1���C���P�ʂŔ��f����l�ɏC��
+-- JP: 拡大スプライトが右に1ドットずれる不具合を修正
+-- JP: SCREEN5でスプライト右端32ドットが表示されない不具合を修正
+-- JP: SCREEN5で211ライン(最下)のスプライトが表示されない不具合を修正
+-- JP: 画面消去フラグ(VdpR1DispOn)を1ライン単位で反映する様に修正
 --
 -- 21st,March,2004 modified by Alex Wulms
 -- Several enhancements to command engine:
@@ -177,47 +177,47 @@
 --   Improve existing commands
 --
 -- 15th,January,2004 modified by Kunihiko Ohnaka
--- JP: VDP�R�}���h�̎������J�n
--- JP: HMMC,HMMM,YMMM,HMMV,LMMC,LMMM,LMMV������.�܂��s�����.
+-- JP: VDPコマンドの実装を開始
+-- JP: HMMC,HMMM,YMMM,HMMV,LMMC,LMMM,LMMVを実装.まだ不具合あり.
 --
 -- 12th,January,2004 modified by Kunihiko Ohnaka
--- JP: �R�����g�̏C��
+-- JP: コメントの修正
 --
 -- 30th,December,2003 modified by Kazuhiro Tsujikawa
--- JP: �N�����̉�ʃ��[�h��NTSC�� VGA�̂ǂ���ɂ��邩���C�O�����͂Őؑ�
--- JP: DHClk/DLClk���ꎞ�I�ɕ���������
+-- JP: 起動時の画面モードをNTSCと VGAのどちらにするかを，外部入力で切替
+-- JP: DHClk/DLClkを一時的に復活させた
 --
 -- 16th,December,2003 modified by Kunihiko Ohnaka
--- JP: �N�����̉�ʃ��[�h��NTSC�� VGA�̂ǂ���ɂ��邩���Cvdp_package.vhd
--- JP: ���Œ�`���ꂽ�萔�Őؑւ���悤�ɂ����D
+-- JP: 起動時の画面モードをNTSCと VGAのどちらにするかを，vdp_package.vhd
+-- JP: 内で定義された定数で切替えるようにした．
 --
 -- 10th,December,2003 modified by Kunihiko Ohnaka
--- JP: TEXT MODE 2 (SCREEN0 WIDTH80)���T�|�[�g�D
--- JP: ���̉������{�𑜓x���[�h�ł���D�ꉞ�����Ή��ł���悤�ɍ����
--- JP: �������肾�������C�������܂肪��������������C���܂肫�ꂢ��
--- JP: �Ή��ɂȂ��Ă��Ȃ�����������܂��D
+-- JP: TEXT MODE 2 (SCREEN0 WIDTH80)をサポート．
+-- JP: 初の横方向倍解像度モードである．一応将来対応できるように作って
+-- JP: きたつもりだったが，少し収まりが悪い部分があり，あまりきれいな
+-- JP: 対応になっていない部分もあります．
 --
 -- 13th,October,2003 modified by Kunihiko Ohnaka
--- JP: ESE-MSX��ł� 2S300E�𕡐��p���鎖���ł���悤�ɂ�CVDP�P�̂�
--- JP: 2S300E�� SRAM���L���鎖���\�ƂȂ����D
--- JP: ����ɔ����ȉ��̂悤�ȕύX���s���D
--- JP: �EVGA�o�͑Ή�(�A�b�v�X�L�����R���o�[�g)
--- JP: �ESCREEN7,8�̃^�C�~���O�����@�Ɠ�����
+-- JP: ESE-MSX基板では 2S300Eを複数用いる事ができるようにり，VDP単体で
+-- JP: 2S300Eや SRAMを占有する事が可能となった．
+-- JP: これに伴い以下のような変更を行う．
+-- JP: ・VGA出力対応(アップスキャンコンバート)
+-- JP: ・SCREEN7,8のタイミングを実機と同じに
 --
 -- 15th,June,2003 modified by Kunihiko Ohnaka
--- JP:�����A�����Ԋ��荞�݂��������ăX�y�[�X�}���{�E��V�ׂ�悤�ɂ����D
--- JP:GraphicMode3(Screen4)��Y���C������ 212���C���ɂȂ�Ȃ������̂�
--- JP:�C�������肵���D
--- JP:�������C�X�y�[�X�}���{�E�� set adjust�@�\�������Ă��Ȃ��悤��
--- JP:�����ŁC�\�����K�N�K�N���Ă��܂��D�������̓����\���X�v���C�g����
--- JP:����Ă��Ȃ��悤�Ɍ�����D�����s���D
+-- JP:水平帰線期間割り込みを実装してスペースマンボウを遊べるようにした．
+-- JP:GraphicMode3(Screen4)でYライン数が 212ラインにならなかったのを
+-- JP:修正したりした．
+-- JP:ただし，スペースマンボウで set adjust機能が動いていないような
+-- JP:感じで，表示がガクガクしてしまう．横方向の同時表示スプライト数も
+-- JP:足りていないように見える．原因不明．
 --
 -- 15th,June,2003 modified by Kunihiko Ohnaka
--- JP:�����u�����N���󂢂Ă��܂������CSpartan-II E + IO��ŃX�v���C�g��
--- JP:�\�������悤�ɂȂ����D�����͂����炭�R���p�C���̃o�O�ŁCISE 5.2��
--- JP:�o�[�W�����A�b�v������\�������悤�ɂȂ����D
--- JP:���łɁC�X�v���C�g���[�h2�ŉ� 8�����Ԃ悤�ɂ���(����)�D
--- JP:���̑��ׂ��ȏC���������Ă��܂��D
+-- JP:長いブランクが空いてしまったが，Spartan-II E + IO基板でスプライトが
+-- JP:表示されるようになった．原因はおそらくコンパイラのバグで，ISE 5.2に
+-- JP:バージョンアップしたら表示されるようになった．
+-- JP:ついでに，スプライトモード2で横 8枚並ぶようにした(つもり)．
+-- JP:その他細かな修正が入っています．
 --
 -- 15th,July,2002 modified by Kazuhiro Tsujikawa
 -- no comment;
@@ -225,9 +225,9 @@
 -------------------------------------------------------------------------------
 -- Document
 --
--- JP: ESE-VDP�̃g�b�v�G���e�B�e�B�ł��BCPU�Ƃ̃C���^�[�t�F�[�X�A
--- JP: ��ʕ`��^�C�~���O�̐����AVDP���W�X�^�̎����Ȃǂ��܂܂��
--- JP: ���܂��B
+-- JP: ESE-VDPのトップエンティティです。CPUとのインターフェース、
+-- JP: 画面描画タイミングの生成、VDPレジスタの実装などが含まれて
+-- JP: います。
 --
 
 
@@ -895,16 +895,16 @@ begin
       
       -- V Sync Interrupt Request
       if( VdpR9YDots = '0' ) then
-        -- JP: 238�͓K��
-        -- JP: 238���ƃX�y�[�X�}���{�E�̃f�����߂��Ă��Ȃ�
+        -- JP: 238は適当
+        -- JP: 238だとスペースマンボウのデモが戻ってこない
 --        vsyncIntStartLine := conv_std_logic_vector(238, vsyncIntStartLine'length);
         vsyncIntStartLine := conv_std_logic_vector(240, vsyncIntStartLine'length);
       else
-        -- JP: 248�͂��Ԃ�����l
+        -- JP: 248はたぶん実測値
         vsyncIntStartLine := conv_std_logic_vector(248, vsyncIntStartLine'length);
       end if;
       if( VdpR9PALMode = '1' ) then
-        -- JP: +25�͓K��
+        -- JP: +25は適当
         vsyncIntStartLine := vsyncIntStartLine + 25;
       end if;
       -- v_counter is count up twice per line.
@@ -935,11 +935,11 @@ begin
 
       
       -- H Sync Interrupt Request
-      -- JP: R19�Ŏw�肵�Ă���"���C���ԍ�"�́C�����X�N���[�����W�X�^��
-      -- JP: �e�����󂯂�A�܂��ʏ�̕����I�Ȉʒu�ł͂Ȃ��A�\�����Ă���
-      -- JP: �_���I�ȃ��C���ԍ�
+      -- JP: R19で指定している"ライン番号"は，垂直スクロールレジスタの
+      -- JP: 影響を受ける、つまり画面上の物理的な位置ではなく、表示している
+      -- JP: 論理的なライン番号
       if (preDotCounter_yp = "000000000") then
-        -- JP: �J�n��0�ł悳�����B-1�ɂ���ƁAMSX�̋N�����S�����܂��\���ł��Ȃ��Ȃ�B
+        -- JP: 開始は0でよさそう。-1にすると、MSXの起動ロゴがうまく表示できなくなる。
         enaHsync <= '1';
       elsif (preWindow_y = '0' ) then
         enaHsync <= '0';
@@ -949,12 +949,12 @@ begin
         hsyncIntReq <= hsyncIntAck;
       elsif( (preDotCounter_x = 255) and
 --      elsif( (preDotCounter_x = 250) and 
-      -- JP:��������HSYNC�̗��������肩��57��s���炢�Ƃ������ʂ�����̂ŁA250���炢�Ȃ̂����H
+      -- JP:実測だとHSYNCの立ち下がりから57μsくらいという結果もあるので、250くらいなのかも？
       -- ((57000/46.5) - 100 - 102 - 56 + 4*8)/4 = 249.95
-      -- �������A250����UR��Horizontal Sprit�Ŗ�肪����̂ŁA��͂�255���炢���ǂ��B
+      -- しかし、250だとURのHorizontal Spritで問題があるので、やはり255くらいが良い。
              (preDotCounter_y(7 downto 0)  = VdpR19HSyncIntLine) ) then
-        -- Jp: ���荞�݂��C�l�[�u���łȂ��Ă��AS#1�̐������荞�݃t���O�����ē��삷��
-        -- JP: �v���O����������̂ŁA�����������荞�݃C�l�[�u���t���O�͌��Ȃ��B
+        -- Jp: 割り込みがイネーブルでなくても、S#1の水平割り込みフラグを見て動作する
+        -- JP: プログラムがあるので、水平同期割り込みイネーブルフラグは見ない。
         hsyncIntReq <= not hsyncIntAck;
       end if;
     end if;
@@ -990,26 +990,26 @@ begin
         window_x <= '0';
       end if;
 
-      -- JP: preDotCounter�͕`��^�C�~���O�ł͂Ȃ��A�`��ׂ̈̃f�[�^��ǂݏo���ׂɎg�p����J�E���^
-      -- JP: �u���\�����Ă�����W�v�ł͂Ȃ��u���ǂ݂����Ă�����W�v�Ƃ�����
+      -- JP: preDotCounterは描画タイミングではなく、描画の為のデータを読み出す為に使用するカウンタ
+      -- JP: 「今表示している座標」ではなく「今読みだしている座標」という事
 
       if( h_counter = ("00" & OFFSET_X & "10" ) ) then
-        -- JP: adjust�����܂��������邽�߁A���̗̈悩��J�E���g�A�b�v���J�n����B
-        -- JP: adjust��+7�̎��� -1�ɂȂ�悤�ɂȂ��Ă���B
+        -- JP: adjustをうまく処理するため、負の領域からカウントアップを開始する。
+        -- JP: adjustが+7の時に -1になるようになっている。
         preDotCounter_x <= "111111000" +  -- -8
                            (VdpR18Adjust(3) & VdpR18Adjust(3) & VdpR18Adjust(3) &
                             VdpR18Adjust(3) & VdpR18Adjust(3) & VdpR18Adjust(3 downto 0));
       elsif( h_counter(1 downto 0) = "10") then 
         preDotCounter_x <= preDotCounter_x + 1;
         if( preDotCounter_x = "111111111" ) then
-          -- JP: preDotCounter_x �� -1����0�ɃJ�E���g�A�b�v���鎞��window��1�ɂ���
+          -- JP: preDotCounter_x が -1から0にカウントアップする時にwindowを1にする
           preWindow_x <= '1';
         elsif( preDotCounter_x = "011111111" ) then
           preWindow_x <= '0';
         end if;
 
         if( preDotCounter_x = "111111111" ) then
-          -- JP: preDotCounter_x �� -1����0�ɃJ�E���g�A�b�v���鎞��dotCounter_x��-8�ɂ���
+          -- JP: preDotCounter_x が -1から0にカウントアップする時にdotCounter_xを-8にする
           dotCounter_x <= "111111000";      -- -8
         else
           dotCounter_x <= dotCounter_x + 1;
@@ -1027,7 +1027,7 @@ begin
       
       if( (h_counter( 1 downto 0) = "10") and
           (preDotCounter_x = "111111111") ) then
-        -- JP: preWindow_x�� 1�ɂȂ�^�C�~���O�Ɠ����^�C�~���O��Y���W�̌v�Z
+        -- JP: preWindow_xが 1になるタイミングと同じタイミングでY座標の計算
         VdpR1DispOn <= VdpR1DispOnX;
         VdpR0DispNum <= VdpR0DispNumX;
         VdpR1DispMode <= VdpR1DispModeX;
@@ -1037,8 +1037,8 @@ begin
             ((v_counter = ("000" & OFFSET_Y & '0')+525+1) and VdpR9InterlaceMode='1' and VdpR9PALMode='0') or
             ((v_counter = ("000" & OFFSET_Y & '0')+626)   and VdpR9InterlaceMode='0' and VdpR9PALMode='1') or
             ((v_counter = ("000" & OFFSET_Y & '0')+625+1) and VdpR9InterlaceMode='1' and VdpR9PALMode='1') ) then
-          -- JP: preDotCounter�� Top Border��`�悷��^�C�~���O
-          -- JP: �i���̗̈�j����J�E���g�A�b�v���J�n����B
+          -- JP: preDotCounterは Top Borderを描画するタイミング
+          -- JP: （負の領域）からカウントアップを開始する。
           -- (for UNKNOWN REALITY's Over Scan Technich)
           if(    VdpR9YDots = '0' and VdpR9PALMode = '0') then
             preDotcounterYpStart := "111100110";  -- -26 = top border lines
@@ -1070,7 +1070,7 @@ begin
         end if;
       end if;
 
-      -- JP: R23�̕ύX�������ɔ��f�����悤�ɂ���. 
+      -- JP: R23の変更が即座に反映されるようにした. 
       preDotCounter_y <= preDotCounter_yp + ('0' & VdpR23VStartLine);
       
       
@@ -1251,8 +1251,8 @@ begin
       --
       if( vramAccessSwitch = VRAM_ACCESS_CPUW ) then
         -- VRAM write by CPU
-        -- JP: GRAPHIC6,7�ł�VRAM��̃A�h���X�� RAM��̃A�h���X�̊֌W��
-        -- JP: ���̉�ʃ��[�h�ƈق�̂Œ���
+        -- JP: GRAPHIC6,7ではVRAM上のアドレスと RAM上のアドレスの関係が
+        -- JP: 他の画面モードと異るので注意
         if( (VdpModeGraphic6 = '1') or (VdpModeGraphic7 = '1') ) then
           iRamAdr <= VdpVramAccessAddr(0) &
                      VdpVramAccessAddr(16 downto 1);
@@ -1279,8 +1279,8 @@ begin
           vdpVramAccessAddrV := VdpVramAccessAddr;
         end if;
 
-      -- JP: GRAPHIC6,7�ł�VRAM��̃A�h���X�� RAM��̃A�h���X�̊֌W��
-        -- JP: ���̉�ʃ��[�h�ƈق�̂Œ���
+      -- JP: GRAPHIC6,7ではVRAM上のアドレスと RAM上のアドレスの関係が
+        -- JP: 他の画面モードと異るので注意
         if( (VdpModeGraphic6 = '1') or (VdpModeGraphic7 = '1') ) then
           iRamAdr <= VdpVramAccessAddrV(0) &
                      VdpVramAccessAddrV(16 downto 1);
@@ -1301,8 +1301,8 @@ begin
       elsif( vramAccessSwitch = VRAM_ACCESS_VDPW) then
         -- VRAM write by VDP command
         -- VDP command write VRAM.
-        -- JP: GRAPHIC6,7�ł̓A�h���X�� RAM��̈ʒu�����̉�ʃ��[�h��
-        -- JP: �ق�̂Œ���
+        -- JP: GRAPHIC6,7ではアドレスと RAM上の位置が他の画面モードと
+        -- JP: 異るので注意
         if( (VdpModeGraphic6 = '1') or (VdpModeGraphic7 = '1') ) then
           iRamAdr <= VdpCmdVramAccessAddr(0) &
                      VdpCmdVramAccessAddr(16 downto 1);
@@ -1315,8 +1315,8 @@ begin
         VdpCmdVramWrAck <= not VdpCmdVramWrAck;
       elsif( vramAccessSwitch = VRAM_ACCESS_VDPR ) then
         -- VRAM read by VDP command
-        -- JP: GRAPHIC6,7�ł̓A�h���X�� RAM��̈ʒu�����̉�ʃ��[�h��
-        -- JP: �ق�̂Œ���
+        -- JP: GRAPHIC6,7ではアドレスと RAM上の位置が他の画面モードと
+        -- JP: 異るので注意
         if( (VdpModeGraphic6 = '1') or (VdpModeGraphic7 = '1') ) then
           iRamAdr <= VdpCmdVramAccessAddr(0) &
                      VdpCmdVramAccessAddr(16 downto 1);
@@ -1644,8 +1644,8 @@ begin
           when "01"   => -- port#1: read status register
             -- Reset the first byte flag after reading of status register.
             -- I don't know this implementation is same as real VDP.
-            -- JP: �X�e�[�^�X���W�X�^��ǂގ��� 1st�o�C�g�t���O�����Z�b�g���Ă݂�.
-            -- JP: ���@�̋����ƍ������ǂ����s��.
+            -- JP: ステータスレジスタを読む時に 1stバイトフラグをリセットしてみる.
+            -- JP: 実機の挙動と合うかどうか不明.
             VdpP1Is1stByte <= '1';
 --            VdpP2Is1stByte <= '1';
 
@@ -1745,8 +1745,8 @@ begin
               paletteDataRB_in <= dbo;
               VdpP2Is1stByte <= '0';
             else
-              -- �p���b�g��RGB�̃f�[�^�����������Ɉ�x�ɏ���������B
-              -- (���@�œ�����m�F����)
+              -- パレットはRGBのデータが揃った時に一度に書き換える。
+              -- (実機で動作を確認した)
               paletteDataG_in <= dbo;
               paletteWrNum <= VdpR16PalNum;
               paletteWrReq <= not paletteWrAck;
