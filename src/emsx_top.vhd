@@ -1331,6 +1331,7 @@ begin
 
     variable iReso      : std_logic;
     variable DispSel    : std_logic_vector(1 downto 0);
+    variable DispSum    : std_logic_vector(1 downto 0);  -- TN9K: restore 2-bit sum
 
   begin
 
@@ -1338,7 +1339,8 @@ begin
 
       
       --case (DispMode + DispSel) is 
-      case (DispMode & DispSel) is -- AL FIX for XST
+      DispSum := DispMode + DispSel;  -- TN9K: original semantics (AL concat was 4-bit)
+      case DispSum is
         when "00" =>    -- TV 15KHz
           pDac_VR <= videoC;
           pDac_VG <= videoY;
