@@ -157,7 +157,7 @@ begin
       
       oFkeys  := (others=>'0');
       
-      Scro    <= Kmap; -- default keyboard layout / '0': Japanese-106, '1': English-101
+      -- TN9K: Scro is driven concurrently from Kmap (async load from a port made a latch)
 
       MtxSeq := MtxIdle;
 
@@ -410,11 +410,13 @@ begin
              
       end if;
 
+      Fkeys <= oFkeys;  -- TN9K: registered (was a latch outside the clock branch)
+
     end if;
 
-    Fkeys <= oFkeys;
-
   end process;
+
+  Scro <= Kmap; -- default keyboard layout / '0': Japanese-106, '1': English-101
 
   pPs2Clk <= 'Z';
 

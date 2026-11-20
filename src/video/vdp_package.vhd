@@ -109,55 +109,6 @@ package vdp_package is
       );
   end component;
 
-  component ntsc
-    port(
-      -- VDP clock ... 21.477MHz
-      clk21m  : in std_logic;
-      reset   : in std_logic;
-
-      -- Video Input
-      videoRin : in std_logic_vector( 5 downto 0);
-      videoGin : in std_logic_vector( 5 downto 0);
-      videoBin : in std_logic_vector( 5 downto 0);
-      videoHSin_n : in std_logic;
-      videoVSin_n : in std_logic;
-      hCounterIn : in std_logic_vector(10 downto 0);
-      vCounterIn : in std_logic_vector(10 downto 0);
-      interlaceMode : in std_logic;
-      
-      -- Video Output
-      videoRout : out std_logic_vector( 5 downto 0);
-      videoGout : out std_logic_vector( 5 downto 0);
-      videoBout : out std_logic_vector( 5 downto 0);
-      videoHSout_n : out std_logic;
-      videoVSout_n : out std_logic
-      );
-  end component;
-
-  component pal
-    port(
-      -- VDP clock ... 21.477MHz
-      clk21m  : in std_logic;
-      reset   : in std_logic;
-
-      -- Video Input
-      videoRin : in std_logic_vector( 5 downto 0);
-      videoGin : in std_logic_vector( 5 downto 0);
-      videoBin : in std_logic_vector( 5 downto 0);
-      videoHSin_n : in std_logic;
-      videoVSin_n : in std_logic;
-      hCounterIn : in std_logic_vector(10 downto 0);
-      vCounterIn : in std_logic_vector(10 downto 0);
-      interlaceMode : in std_logic;
-      
-      -- Video Output
-      videoRout : out std_logic_vector( 5 downto 0);
-      videoGout : out std_logic_vector( 5 downto 0);
-      videoBout : out std_logic_vector( 5 downto 0);
-      videoHSout_n : out std_logic;
-      videoVSout_n : out std_logic
-      );
-  end component;
   
   component vga
     port(
@@ -349,30 +300,6 @@ package vdp_package is
          data     : in  std_logic_vector(31 downto 0);
          q        : out std_logic_vector(31 downto 0)
         );
-  end component;
-
-  component osd
-    port(
-      -- VDP clock ... 21.477MHz
-      clk21m  : in std_logic;
-      reset   : in std_logic;
-      
-      -- video timing
-      h_counter  : in std_logic_vector(10 downto 0);
-      dotCounterY : in std_logic_vector( 7 downto 0);
-
-      -- pattern name table access
-      locateX    : in std_logic_vector( 5 downto 0);
-      locateY    : in std_logic_vector( 4 downto 0);
-      charCodeIn : in std_logic_vector( 7 downto 0);
-      charWrReq  : in std_logic;
-      charWrAck  : out std_logic;
-
-      -- Video Output
-      videoR     : out std_logic_vector( 3 downto 0);
-      videoG     : out std_logic_vector( 3 downto 0);
-      videoB     : out std_logic_vector( 3 downto 0)
-      );
   end component;
 
   -- convert character to 8 bit signed 

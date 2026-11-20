@@ -86,7 +86,10 @@ entity T80a is
         HALT_n      : out std_logic;
         BUSAK_n     : out std_logic;
         A           : out std_logic_vector(15 downto 0);
-        D           : inout std_logic_vector(7 downto 0)
+        -- TN9K: split data bus (no internal tri-states)
+        DI          : in  std_logic_vector(7 downto 0);
+        DO          : out std_logic_vector(7 downto 0);
+        DOE         : out std_logic                     -- '1' while CPU drives DO
     );
 end T80a;
 
@@ -111,7 +114,7 @@ architecture rtl of T80a is
     signal RFSH_n_i     : std_logic;
     signal BUSAK_n_i    : std_logic;
     signal A_i          : std_logic_vector(15 downto 0);
-    signal DO           : std_logic_vector(7 downto 0);
+    signal DO_i         : std_logic_vector(7 downto 0);
     signal DI_Reg       : std_logic_vector (7 downto 0);    -- Input synchroniser
     signal Wait_s       : std_logic;
     signal MCycle       : std_logic_vector(2 downto 0);
@@ -126,13 +129,14 @@ begin
     RD_n_i <= not RD or Req_Inhibit;
     WR_n_j <= WR_n_i;					    		-- 0247a
 
-    MREQ_n <= MREQ_n_i when BUSAK_n_i = '1' else 'Z';
-    IORQ_n <= IORQ_n_i or IReq_Inhibit when BUSAK_n_i = '1' else 'Z';	-- 0247a
-    RD_n <= RD_n_i when BUSAK_n_i = '1' else 'Z';
-    WR_n <= WR_n_j when BUSAK_n_i = '1' else 'Z';			-- 0247a
-    RFSH_n <= RFSH_n_i when BUSAK_n_i = '1' else 'Z';
-    A <= A_i when BUSAK_n_i = '1' else (others => 'Z');
-    D <= DO when Write = '1' and BUSAK_n_i = '1' else (others => 'Z');
+    MREQ_n <= MREQ_n_i when BUSAK_n_i = '1' else '1';
+    IORQ_n <= IORQ_n_i or IReq_Inhibit when BUSAK_n_i = '1' else '1';	-- 0247a
+    RD_n <= RD_n_i when BUSAK_n_i = '1' else '1';
+    WR_n <= WR_n_j when BUSAK_n_i = '1' else '1';			-- 0247a
+    RFSH_n <= RFSH_n_i when BUSAK_n_i = '1' else '1';
+    A <= A_i when BUSAK_n_i = '1' else (others => '1');
+    DO  <= DO_i;
+    DOE <= '1' when Write = '1' and BUSAK_n_i = '1' else '0';
 
     process (RESET_n, CLK_n)
     begin
@@ -163,9 +167,9 @@ begin
             BUSAK_n => BUSAK_n_i,
             CLK_n => CLK_n,
             A => A_i,
-            DInst => D,
+            DInst => DI,
             DI => DI_Reg,
-            DO => DO,
+            DO => DO_i,
             MC => MCycle,
             TS => TState,
             IntCycle_n => IntCycle_n);
@@ -175,7 +179,7 @@ begin
         if CLK_n'event and CLK_n = '0' then
             Wait_s <= WAIT_n;
             if TState = "011" and BUSAK_n_i = '1' then
-                DI_Reg <= to_x01(D);
+                DI_Reg <= to_x01(DI);
             end if;
         end if;
     end process;

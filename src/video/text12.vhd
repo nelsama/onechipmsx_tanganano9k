@@ -193,6 +193,8 @@ begin
       iTxVramReadEn <= '0';
       iTxVramReadEn2 <= '0';
       blinkFrameCount <= (others => '0');
+      blinkState <= '0';
+      blinkPeriodCount <= (others => '0');
       dotCounter24 <= (others => '0');
     elsif (clk21m'event and clk21m = '1') then
 
@@ -355,10 +357,11 @@ begin
 
         when others => null;
       end case;
-    end if;
 
     --
     -- Blink timing generation
+    -- TN9K: moved inside the clock edge (it was outside, producing latches
+    --       and combinational loops) and blinkPeriodCount now counts.
     --
     if( (dotCounterX = 0) and (dotCounterY = 0) and (dotState = "00") ) then
       if (blinkFrameCount = "1001") then
@@ -382,9 +385,13 @@ begin
         elsif( (blinkState = '1') and (blinkPeriodCount >= VdpR13BlinkPeriod(7 downto 4)) ) then
           blinkState <= '0';
           blinkPeriodCount <= (others => '0');
+        else
+          blinkPeriodCount <= blinkPeriodCount + 1;
         end if;
       end if;
     end if;
-    
+
+    end if;
+
   end process;
 end rtl;

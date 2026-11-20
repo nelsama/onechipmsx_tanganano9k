@@ -35,42 +35,26 @@ use ieee.std_logic_1164.all;
 use ieee.std_logic_unsigned.all;
 use work.vdp_package.all;
 
-entity emsx_top is
+entity emsx_core is
+  generic(
+    -- TN9K: optional blocks (to fit the GW1NR-9). Disabled blocks answer
+    -- their I/O ports with FFh and acknowledge immediately.
+    ENABLE_OPLL  : boolean := true;   -- MSX-MUSIC (YM2413)
+    ENABLE_SCC   : boolean := true;   -- ESE-SCC / MegaRAM in slot 2
+    ENABLE_RTC   : boolean := true;   -- RP5C01 clock
+    ENABLE_KANJI : boolean := true;   -- Kanji ROM I/O (D8-DBh)
+    -- Former DIP switches (1 = ON)
+    CFG_MEGTYPE  : std_logic_vector(1 downto 0) := "10";  -- slot2: "00"=none, "10"=SCC+, "01"=ASC8K, "11"=ASC16K (megaram decodes bit0=0 as SCC)
+    CFG_MMC      : std_logic := '1';  -- SD card drive enabled
+    CFG_KMAP_US  : std_logic := '1'   -- PS/2 layout: '0'=Japanese-106, '1'=English-101
+  );
   port(
-    -- Clock, Reset ports
-    pClk21m     : in std_logic;				-- VDP clock ... 21.48MHz
-    pExtClk     : in std_logic;				-- Reserved (for multi FPGAs)
-    pCpuClk     : out std_logic;			-- CPU clock ... 3.58MHz (up to 10.74MHz/21.48MHz)
---  pCpuRst_n   : out std_logic;			-- CPU reset
+    -- Clocks / reset (from board top)
+    clk21m      : in std_logic;                         -- 21.48MHz (VDP / system)
+    memclk      : in std_logic;                         -- 85.92MHz (SD-RAM sequencer, = 4 x clk21m)
+    reset_n     : in std_logic;                         -- synchronous to clk21m, active low
 
-    -- MSX cartridge slot ports
-    pSltClk     : in std_logic;                         -- pCpuClk returns here, for Z80, etc.
-    pSltRst_n   : in std_logic;                         -- pCpuRst_n returns here
-    pSltSltsl_n : inout std_logic;
-    pSltSlts2_n : inout std_logic;
-    pSltIorq_n  : inout std_logic;
-    pSltRd_n    : inout std_logic;
-    pSltWr_n    : inout std_logic;
-    pSltAdr     : inout std_logic_vector(15 downto 0);
-    pSltDat     : inout std_logic_vector(7 downto 0);
-    pSltBdir_n  : out std_logic;                        -- Bus direction (not used in master mode)
-
-    pSltCs1_n   : inout std_logic;
-    pSltCs2_n   : inout std_logic;
-    pSltCs12_n  : inout std_logic;
-    pSltRfsh_n  : inout std_logic;
-    pSltWait_n  : inout std_logic;
-    pSltInt_n   : inout std_logic;
-    pSltM1_n    : inout std_logic;
-    pSltMerq_n  : inout std_logic;
-
-    pSltRsv5    : out std_logic;                        -- Reserved
-    pSltRsv16   : out std_logic;                        -- Reserved (w/ external pull-up)
-    pSltSw1     : inout std_logic;                      -- Reserved (w/ external pull-up)
-    pSltSw2     : inout std_logic;                      -- Reserved
-
-    -- SD-RAM ports
-    pMemClk     : out std_logic;                        -- SD-RAM Clock
+    -- SD-RAM ports (temporary: replaced by the PSRAM interface in phase 3)
     pMemCke     : out std_logic;                        -- SD-RAM Clock enable
     pMemCs_n    : out std_logic;                        -- SD-RAM Chip select
     pMemRas_n   : out std_logic;                        -- SD-RAM Row/RAS
@@ -87,63 +71,40 @@ entity emsx_top is
     pPs2Clk     : inout std_logic;
     pPs2Dat     : inout std_logic;
 
-    -- Joystick ports (Port_A, Port_B)
-    pJoyA       : inout std_logic_vector( 5 downto 0);
+    -- Joystick ports (Port_A, Port_B), inputs only ('1' = released)
+    pJoyA       : in  std_logic_vector( 5 downto 0);
     pStrA       : out std_logic;
-    pJoyB       : inout std_logic_vector( 5 downto 0);
+    pJoyB       : in  std_logic_vector( 5 downto 0);
     pStrB       : out std_logic;
 
-    -- SD/MMC slot ports
-    pSd_Ck      : out std_logic;                        -- pin 5
-    pSd_Cm      : out std_logic;                        -- pin 2
-    pSd_Dt      : inout std_logic_vector( 3 downto 0);  -- pin 1(D3), 9(D2), 8(D1), 7(D0)
+    -- SD card (SPI mode)
+    pSd_Ck      : out std_logic;                        -- CLK
+    pSd_Cm      : out std_logic;                        -- CMD / MOSI
+    pSd_Cs      : out std_logic;                        -- DAT3 / CS
+    pSd_Do      : in  std_logic;                        -- DAT0 / MISO
 
-    -- DIP switch, Lamp ports
-    pDip        : in std_logic_vector( 7 downto 0);     -- 0=ON,  1=OFF(default on shipment)
-    pLed        : out std_logic_vector( 7 downto 0);    -- 0=OFF, 1=ON(green)
-    pLedPwr     : out std_logic;                        -- 0=OFF, 1=ON(red) ...Power & SD/MMC access lamp
+    -- BIOS flash (SPI, former EPCS)
+    pEpc_Ck     : out std_logic;
+    pEpc_Cs     : out std_logic;
+    pEpc_Di     : out std_logic;                        -- FPGA -> flash
+    pEpc_Do     : in  std_logic;                        -- flash -> FPGA
 
-    -- Video, Audio/CMT ports
-    pDac_VR     : inout std_logic_vector( 5 downto 0);  -- RGB_Red / Svideo_C
-    pDac_VG     : inout std_logic_vector( 5 downto 0);  -- RGB_Grn / Svideo_Y
-    pDac_VB     : inout std_logic_vector( 5 downto 0);  -- RGB_Blu / CompositeVideo
-    pDac_SL     : out   std_logic_vector( 5 downto 0);  -- Sound-L
-    pDac_SR     : inout std_logic_vector( 5 downto 0);  -- Sound-R / CMT
+    -- Lamp
+    pLedSd      : out std_logic;                        -- 1 = SD card access
 
-    pVideoHS_n  : out std_logic;                        -- Csync(RGB15K), HSync(VGA31K)
-    pVideoVS_n  : out std_logic;                        -- Audio(RGB15K), VSync(VGA31K)
+    -- Video (VGA 31kHz timing, 6 bits per channel)
+    pVideoR     : out std_logic_vector( 5 downto 0);
+    pVideoG     : out std_logic_vector( 5 downto 0);
+    pVideoB     : out std_logic_vector( 5 downto 0);
+    pVideoHS_n  : out std_logic;
+    pVideoVS_n  : out std_logic;
 
-    pVideoClk   : out std_logic;                        -- (Reserved)
-    pVideoDat   : out std_logic;                        -- (Reserved)
-
-    -- Reserved ports (USB)
-    pUsbP1      : inout std_logic;
-    pUsbN1      : inout std_logic;
-    pUsbP2      : inout std_logic;
-    pUsbN2      : inout std_logic;
-
-    -- Reserved ports
-    pIopRsv14   : in std_logic;
-    pIopRsv15   : in std_logic;
-    pIopRsv16   : in std_logic;
-    pIopRsv17   : in std_logic;
-    pIopRsv18   : in std_logic;
-    pIopRsv19   : in std_logic;
-    pIopRsv20   : in std_logic;
-    pIopRsv21   : in std_logic
+    -- Audio (1-bit PWM, needs an RC low-pass filter)
+    pAudio      : out std_logic
   );
-end emsx_top;
+end emsx_core;
 
-architecture rtl of emsx_top is
-
-  component pll4x                       -- Altera specific component
-    port(
-      inclk0 : in std_logic := '0';     -- 21.48MHz input to PLL    (external I/O pin, from crystal oscillator)
-      c0     : out std_logic ;          -- 21.48MHz output from PLL (internal LEs, for VDP, internal-bus, etc.)
-      c1     : out std_logic ;          -- 85.92MHz output from PLL (internal LEs, for SD-RAM)
-      e0     : out std_logic            -- 85.92MHz output from PLL (external I/O pin, for SD-RAM)
-    );
-  end component;
+architecture rtl of emsx_core is
 
   component t80a
     port(
@@ -162,7 +123,9 @@ architecture rtl of emsx_top is
       HALT_n  : out std_logic;
       BUSAK_n : out std_logic;
       A       : out std_logic_vector(15 downto 0);
-      D       : inout std_logic_vector(7 downto 0)
+      DI      : in  std_logic_vector(7 downto 0);
+      DO      : out std_logic_vector(7 downto 0);
+      DOE     : out std_logic
     );
   end component;
 
@@ -209,16 +172,6 @@ architecture rtl of emsx_top is
     );
   end component;
 
-  component cyclone_asmiblock   	-- Altera specific component
-    port (
-      dclkin   : in std_logic;  	-- DCLK
-      scein    : in std_logic;  	-- nCSO
-      sdoin    : in std_logic;  	-- ASDO
-      oe       : in std_logic;  	--(1=disable(Hi-Z))
-      data0out : out std_logic  	-- DATA0
-    );
-  end component;
-
   component mapper
     port(
       clk21m  : in std_logic;
@@ -258,8 +211,8 @@ architecture rtl of emsx_top is
 
     pPs2Clk  : inout std_logic;
     pPs2Dat  : inout std_logic;
-    PpiPortC : inout std_logic_vector(7 downto 0);
-    pKeyX    : inout std_logic_vector(7 downto 0)
+    PpiPortC : in  std_logic_vector(7 downto 0);
+    pKeyX    : out std_logic_vector(7 downto 0)
   );
   end component;
 
@@ -323,41 +276,10 @@ architecture rtl of emsx_top is
 
     pVideoHS_n : out std_logic;
     pVideoVS_n : out std_logic;
-    pVideoCS_n : out std_logic;
 
     pVideoDHClk : out std_logic;
-    pVideoDLClk : out std_logic;
-
-    -- CXA1645(RGB->NTSC encoder) signals
-    pVideoSC : out std_logic;
-    pVideoSYNC : out std_logic;
-
-    -- Display resolution (0=15kHz, 1=31kHz)
-    DispReso : in  std_logic;
-
-    -- Debug window signals
-    debugWindowToggle : in std_logic;
-    osdLocateX    : in std_logic_vector( 5 downto 0);
-    osdLocateY    : in std_logic_vector( 4 downto 0);
-    osdCharCodeIn : in std_logic_vector( 7 downto 0);
-    osdCharWrReq  : in std_logic;
-    osdCharWrAck  : out std_logic
+    pVideoDLClk : out std_logic
   );
-  end component;
-
-  component vencode
-    port(
-      clk21m    : in std_logic;
-      reset     : in std_logic;
-      videoR    : in std_logic_vector(5 downto 0);
-      videoG    : in std_logic_vector(5 downto 0);
-      videoB    : in std_logic_vector(5 downto 0);
-      videoHS_n : in std_logic;
-      videoVS_n : in std_logic;
-      videoY    : out std_logic_vector(5 downto 0);
-      videoC    : out std_logic_vector(5 downto 0);
-      videoV    : out std_logic_vector(5 downto 0)
-    );
   end component;
 
   component psg
@@ -372,9 +294,9 @@ architecture rtl of emsx_top is
       dbi     : out std_logic_vector(7 downto 0);
       dbo     : in std_logic_vector(7 downto 0);
 
-      joya    : inout std_logic_vector(5 downto 0);
+      joya    : in  std_logic_vector(5 downto 0);
       stra    : out std_logic;
-      joyb    : inout std_logic_vector(5 downto 0);
+      joyb    : in  std_logic_vector(5 downto 0);
       strb    : out std_logic;
 
       kana    : out std_logic;
@@ -438,10 +360,15 @@ architecture rtl of emsx_top is
   end component;
 
   -- Operation mode
-  signal SelfMode    : std_logic;               -- Operation mode        : 0=slave, 1=master
+  -- TN9K: always master mode (internal CPU); former DIP switches are generics.
+  constant SelfMode  : std_logic := '1';        -- Operation mode        : 0=slave, 1=master
   signal KeyMode     : std_logic;               -- Kana key board layout : 1=JIS layout
-  signal iDipLed     : std_logic_vector(7 downto 0);
-  signal DispMode    : std_logic_vector(1 downto 0);
+  function megsel(en : boolean; t : std_logic_vector(1 downto 0)) return std_logic_vector is
+  begin
+    if en then return t; else return "00"; end if;
+  end function;
+  constant iDipLed   : std_logic_vector(7 downto 0) :=
+                         megsel(ENABLE_SCC, CFG_MEGTYPE) & '0' & CFG_MMC & CFG_KMAP_US & "000";
   alias  MegType     : std_logic_vector(1 downto 0) is iDipLed(7 downto 6);
   alias  RedMode     : std_logic is iDipLed(5); -- '0': CPU_3.58MHz,    '1': CPU_10.74MHz
   alias  MmcMode     : std_logic is iDipLed(4); -- '0': disable SD/MMC, '1': enable SD/MMC
@@ -449,14 +376,10 @@ architecture rtl of emsx_top is
   alias  RchMode     : std_logic is iDipLed(2); -- '0': RCA(red)=CMT,   '1': RCA(red)=Rch_sound
 
   -- Clock, Reset control signals
-  signal clk21m      : std_logic;
-  signal memclk      : std_logic;
   signal cpuclk      : std_logic;
   signal clkena      : std_logic;
-  signal clkdiv      : std_logic_vector(1 downto 0);
-  signal clksel      : std_logic_vector(1 downto 0);
+  constant clksel    : std_logic_vector(1 downto 0) := "00";  -- TN9K: 3.58MHz only (no turbo)
   signal reset       : std_logic;
-  signal RstEna      : std_logic := '0';
   signal RstSeq      : std_logic_vector(4 downto 0) := (others => '0');
   signal FreeCounter : std_logic_vector(15 downto 0) := (others => '0');
 
@@ -475,8 +398,18 @@ architecture rtl of emsx_top is
   signal dlydbi      : std_logic_vector(7 downto 0);
   signal BusReq_n    : std_logic;
   signal CpuM1_n     : std_logic;
-  signal CpuRst_n    : std_logic;
   signal CpuRfsh_n   : std_logic;
+
+  -- TN9K: internal CPU bus (was the external cartridge slot bus pSlt*)
+  signal BusMerq_n   : std_logic;
+  signal BusIorq_n   : std_logic;
+  signal BusRd_n     : std_logic;
+  signal BusWr_n     : std_logic;
+  signal BusWait_n   : std_logic;
+  signal BusAdr      : std_logic_vector(15 downto 0);
+  signal BusDat      : std_logic_vector(7 downto 0);   -- resolved data bus
+  signal CpuDo       : std_logic_vector(7 downto 0);
+  signal CpuDoe      : std_logic;
 
   -- Internal bus signals (common)
   signal req, ireq   : std_logic;
@@ -555,8 +488,7 @@ architecture rtl of emsx_top is
 
   -- PS/2 signals
   signal Paus        : std_logic;
-  signal Reso, iReso : std_logic;
-  signal Reso_v      : std_logic;
+  signal Reso        : std_logic;
   signal Kana        : std_logic;
   signal Caps        : std_logic;
   signal Fkeys       : std_logic_vector(7 downto 0);
@@ -594,12 +526,6 @@ architecture rtl of emsx_top is
   signal VrmDbo      : std_logic_vector(7 downto 0);
   signal VrmDbi      : std_logic_vector(15 downto 0);
   signal pVdpInt_n   : std_logic;
-  -- (for on screen display)
-  signal osdLocateX     : std_logic_vector(5 downto 0);
-  signal osdLocateY     : std_logic_vector(4 downto 0);
-  signal osdCharCodeIn  : std_logic_vector(7 downto 0);
-  signal osdCharWrReq   : std_logic;
-  signal osdCharWrAck   : std_logic;
 
   -- Video signals
   signal VideoR      : std_logic_vector( 5 downto 0);   -- RGB_Red
@@ -607,10 +533,6 @@ architecture rtl of emsx_top is
   signal VideoB      : std_logic_vector( 5 downto 0);   -- RGB_Blue
   signal VideoHS_n   : std_logic;                       -- Holizontal Sync
   signal VideoVS_n   : std_logic;                       -- Vertical Sync
-  signal VideoCS_n   : std_logic;                       -- Composite Sync
-  signal videoY      : std_logic_vector( 5 downto 0);   -- Svideo_Y
-  signal videoC      : std_logic_vector( 5 downto 0);   -- Svideo_C
-  signal videoV      : std_logic_vector( 5 downto 0);   -- CompositeVideo
 
   -- PSG signals
   signal PsgReq      : std_logic;
@@ -648,10 +570,6 @@ architecture rtl of emsx_top is
   signal SccVol      : std_logic_vector(2 downto 0);
   signal OpllVol     : std_logic_vector(2 downto 0);
   signal MstrVol     : std_logic_vector(2 downto 0);
-
-  signal pSltSndL    : std_logic_vector(5 downto 0);
-  signal pSltSndR    : std_logic_vector(5 downto 0);
-  signal pSltSound   : std_logic_vector(5 downto 0);
 
   -- Exernal memory signals
   signal RamReq      : std_logic;
@@ -713,36 +631,13 @@ begin
       end if;
       cpuclk <= jc(3);
 
-       -- Prescaler : 21.48MHz / 4
-      clkdiv <= clkdiv - 1;
-
     end if;
 
   end process;
 
-
-  ----------------------------------------------------------------
-  -- Clock selector
-  ----------------------------------------------------------------
-  process(clk21m)
-  begin
-    if (clk21m'event and clk21m = '0') then
-      if (cpuclk = '0' and clkdiv = "00") then
-        if (RedMode = '0') then
-          clksel <= "00";                               --  3.58MHz (standard speed)
-        elsif (reset = '1') then
-          clksel <= "01";                               -- 10.74MHz (workaround for boot failure)
---      elsif (iSltIorq_n = '0' and adr(7 downto 2) = "101010") then
---        clksel <= "11";                               -- 21.48MHz (much troublesome with external device)
-        end if;
-      end if;
-    end if;
-  end process;
-
-  pCpuClk <= cpuclk    when SelfMode = '1' and clksel = "00" else
-             clkdiv(0) when SelfMode = '1' and clksel = "01" else
-             clkdiv(1) when SelfMode = '1' and clksel = "10" else
-             clk21m    when SelfMode = '1' and clksel = "11" else 'Z';
+  -- TN9K: clock selector (turbo 10.74/21.48MHz) removed, clksel is constant "00".
+  -- The Z80 runs on cpuclk directly (it used to leave the FPGA as pCpuClk and
+  -- come back through the slot connector as pSltClk).
 
 
   ----------------------------------------------------------------
@@ -764,133 +659,42 @@ begin
     end if;
   end process;
 
-  --  Reset pulse width = 48 ms
-  process (memclk, RstEna)
-  begin
-    if (RstEna = '0') then
-      CpuRst_n <= '0';
-    elsif (memclk'event and memclk = '1') then
-      if (RstSeq(4) = '0') then
-        CpuRst_n <= 'Z';
-      else
-        CpuRst_n <= 'Z';
-      end if;
-    end if;
-  end process;
-
---pCpuRst_n <= CpuRst_n;
-  reset     <= not pSltRst_n;
+  -- TN9K: reset comes from the board top (power-on + button), already
+  -- synchronised to clk21m. The unused CpuRst_n generator was removed.
+  reset     <= not reset_n;
 
 
-----------------------------------------------------------------
--- Operation mode
-----------------------------------------------------------------
+  ----------------------------------------------------------------
+  -- SD access lamp (TN9K: DIP switch / LED scanner removed)
+  ----------------------------------------------------------------
   process(clk21m)
-
-    variable seq : std_logic_vector(3 downto 0) := (others => '0');
-    variable cnt : std_logic_vector(20 downto 0) := (others => '0');
-
   begin
-
     if (clk21m'event and clk21m = '1') then
-
-      if (reset = '1') then
-        SelfMode  <= '1';               -- Operation mode : 0=slave, 1=master
-        pLedPwr   <= seq(0);            -- Reset status, factory use
-      else
-        pLedPwr   <= not MmcEna;        -- SD/MMC access lamp
-      end if;
-
-      if (seq(3 downto 1) = "000") then
-        RstEna   <= '0';
-      else
-        RstEna   <= '1';
-      end if;
-
-      if (cnt = "000000000000000000000") then	-- 21.48MHz / 2^21(approx:2M) => 10Hz
-        case seq is
-          when "0010"  => pLed <= "000000Z1";  iDipLed(2) <= not pDip(2);
-          when "0011"  => pLed <= "0000001Z";  iDipLed(1) <= not pDip(1);
-          when "0100"  => pLed <= "000001Z0";  iDipLed(0) <= not pDip(0);
-          when "0101"  => pLed <= "00001Z00";  iDipLed(1) <= not pDip(1);
-          when "0110"  => pLed <= "0001Z000";  iDipLed(2) <= not pDip(2);
-          when "0111"  => pLed <= "001Z0000";  iDipLed(3) <= not pDip(3);
-          when "1000"  => pLed <= "01Z00000";  iDipLed(4) <= not pDip(4);
-          when "1001"  => pLed <= "1Z000000";  iDipLed(5) <= not pDip(5);
-          when "1010"  => pLed <= "Z1000000";  iDipLed(6) <= not pDip(6);
-          when "1011"  => pLed <= "0Z100000";  iDipLed(7) <= not pDip(7);
-          when "1100"  => pLed <= "00Z10000";  iDipLed(6) <= not pDip(6);
-          when "1101"  => pLed <= "000Z1000";  iDipLed(5) <= not pDip(5);
-          when "1110"  => pLed <= "0000Z100";  iDipLed(4) <= not pDip(4);
-          when "1111"  => pLed <= "00000Z10";  iDipLed(3) <= not pDip(3);
-          when others  => pLed <= "ZZZZZZZZ";  iDipLed    <= not pDip   ;
-        end case;
-      end if;
-
-      if (cnt = "000000000000000000000") then
-        if (seq = "1111") then
-          seq := "0010";
-        else
-          seq := seq + 1;
-        end if;
-      end if;
-
-      cnt := cnt + 1;
-
+      pLedSd <= not MmcEna;
     end if;
-
   end process;
 
   KeyMode   <= '1';     -- Kana key board layout  : 1=JIS layout
 
 
   ----------------------------------------------------------------
-  -- MSX cartridge slot control
+  -- Internal CPU data bus (TN9K: replaces the tri-stated slot bus)
+  --   CPU write cycle      : CPU data
+  --   read of an internal device : dbi
+  --   read of an empty slot (1/2) : FFh (slot pull-ups)
   ----------------------------------------------------------------
-  pSltCs1_n   <= 'Z'      when SelfMode = '0'               else
-                 pSltRd_n when pSltAdr(15 downto 14) = "01" else '1';
-  pSltCs2_n   <= 'Z'      when SelfMode = '0'               else 
-                 pSltRd_n when pSltAdr(15 downto 14) = "10" else '1';
-  pSltCs12_n  <= 'Z'      when SelfMode = '0'               else 
-                 pSltRd_n when pSltAdr(15 downto 14) = "01" else 
-                 pSltRd_n when pSltAdr(15 downto 14) = "10" else '1';
-  pSltM1_n    <= CpuM1_n   when SelfMode = '1' else 'Z';
-  pSltRfsh_n  <= CpuRfsh_n when SelfMode = '1' else 'Z';
-
-  pSltInt_n   <= pVdpInt_n;
-
-  pSltSltsl_n <= 'Z' when SelfMode = '0' else
-                 '0' when pSltMerq_n  = '0' and CpuRfsh_n = '1' and PriSltNum  = "01" else
-                 '1';
-
-  pSltSlts2_n <= 'Z' when SelfMode = '0' else
-                 '1' when MegType /= "00" else
-                 '0' when pSltMerq_n  = '0' and CpuRfsh_n = '1' and PriSltNum  = "10" else
-                 '1';
-
-  pSltBdir_n  <= 'Z' when pSltRd_n = '1' else
-                 '0' when pSltSltsl_n = '0' and SelfMode = '0' else
-                 '0' when pSltIorq_n  = '0' and SelfMode = '0' and pSltAdr(7 downto 2)= "100010" else
-                 'Z';
-
-  pSltDat     <= (others => 'Z') when pSltRd_n = '1' else
-                 dbi when pSltSltsl_n = '0' and SelfMode = '0' else
-                 dbi when pSltIorq_n  = '0' and BusDir   = '1' else
-                 dbi when pSltMerq_n  = '0' and SelfMode = '1' and PriSltNum = "00" else
-                 dbi when pSltMerq_n  = '0' and SelfMode = '1' and PriSltNum = "11" else
-                 dbi when pSltMerq_n  = '0' and SelfMode = '1' and PriSltNum = "10" and MegType /= "00" else
-                 (others => 'Z');
-
-  pSltRsv5  <= 'Z';
-  pSltRsv16 <= 'Z';
-  pSltSw1   <= 'Z';
-  pSltSw2   <= 'Z';
+  BusDat <= CpuDo when CpuDoe = '1' else
+            dbi   when BusRd_n = '0' and BusIorq_n = '0' and BusDir = '1' else
+            dbi   when BusRd_n = '0' and BusMerq_n = '0' and PriSltNum = "00" else
+            dbi   when BusRd_n = '0' and BusMerq_n = '0' and PriSltNum = "11" else
+            dbi   when BusRd_n = '0' and BusMerq_n = '0' and PriSltNum = "10" and MegType /= "00" else
+            (others => '1');
 
 
   ----------------------------------------------------------------
   -- Z80 CPU wait control
   ----------------------------------------------------------------
-  process(pSltClk, reset)
+  process(cpuclk, reset)
 
     variable iCpuM1_n : std_logic;
     variable jSltMerq_n : std_logic;
@@ -904,10 +708,10 @@ begin
       jSltIorq_n := '1';
       jSltMerq_n := '1';
       count      := (others => '0');
-      pSltWait_n <= 'Z';
-    elsif (pSltClk'event and pSltClk = '1') then
+      BusWait_n <= '1';
+    elsif (cpuclk'event and cpuclk = '1') then
 
-      if (pSltMerq_n = '0' and jSltMerq_n = '1') then
+      if (BusMerq_n = '0' and jSltMerq_n = '1') then
         if (clksel = "11" and VideoDLClk = '0' and VideoDHClk = '1') then
           count := "0101";
         elsif (clksel = "11" and iSltScc = '1') then
@@ -917,7 +721,7 @@ begin
         elsif (clksel = "01") then
           count := "0010";
         end if;
-      elsif (pSltIorq_n = '0' and jSltIorq_n = '1') then
+      elsif (BusIorq_n = '0' and jSltIorq_n = '1') then
         if (clksel = "11") then
           count := "0111";
         elsif (clksel = "01") then
@@ -928,26 +732,26 @@ begin
       end if;
 
       if (SelfMode = '0') then
-        pSltWait_n <= 'Z';
+        BusWait_n <= '1';
       elsif (CpuM1_n = '0' and iCpuM1_n = '1') then
-        pSltWait_n <= '0';
+        BusWait_n <= '0';
       elsif (count /= "0000") then
-        pSltWait_n <= '0';
+        BusWait_n <= '0';
       elsif (clksel /= "00" and OpllReq = '1' and OpllAck = '0') then
-        pSltWait_n <= '0';
+        BusWait_n <= '0';
 --    elsif (clksel /= "00" and iSltErm = '1' and MmcAct = '1') then
---      pSltWait_n <= '0';
+--      BusWait_n <= '0';
       elsif (ErmReq = '1' and adr(15 downto 13) = "010" and MmcAct = '1') then
-        pSltWait_n <= '0';
+        BusWait_n <= '0';
       elsif (SdPaus = '1') then
-        pSltWait_n <= '0';
+        BusWait_n <= '0';
       else
-        pSltWait_n <= 'Z';
+        BusWait_n <= '1';
       end if;
 
       iCpuM1_n := CpuM1_n;
-      jSltIorq_n := pSltIorq_n;
-      jSltMerq_n := pSltMerq_n;
+      jSltIorq_n := BusIorq_n;
+      jSltMerq_n := BusMerq_n;
 
     end if;
 
@@ -984,25 +788,21 @@ begin
     elsif (clk21m'event and clk21m = '1') then
 
       -- MSX slot signals
-      if (SelfMode = '0') then
-        iSltSltsl_n <= pSltSltsl_n;
-      else
-        iSltSltsl_n <= '1';
-      end if;
-      iSltRfsh_n  <= pSltRfsh_n;
-      iSltMerq_n  <= pSltMerq_n;
-      iSltIorq_n  <= pSltIorq_n;
-      iSltRd_n    <= pSltRd_n;
-      iSltWr_n    <= pSltWr_n;
+      iSltSltsl_n <= '1';                 -- TN9K: master mode only
+      iSltRfsh_n  <= CpuRfsh_n;
+      iSltMerq_n  <= BusMerq_n;
+      iSltIorq_n  <= BusIorq_n;
+      iSltRd_n    <= BusRd_n;
+      iSltWr_n    <= BusWr_n;
       if (clksel = "11") then
         xSltRd_n    <= iSltRd_n;
         xSltWr_n    <= iSltWr_n;
       else
-        xSltRd_n    <= pSltRd_n;
-        xSltWr_n    <= pSltWr_n;
+        xSltRd_n    <= BusRd_n;
+        xSltWr_n    <= BusWr_n;
       end if;
-      iSltAdr     <= pSltAdr;
-      iSltDat     <= pSltDat;
+      iSltAdr     <= BusAdr;
+      iSltDat     <= BusDat;
 
       if (iSltSltsl_n = '1' and iSltMerq_n  = '1' and iSltIorq_n = '1') then
         iack <= '0';
@@ -1081,7 +881,7 @@ begin
       end if;
 
       if (req = '0') then
-        wrt <= not pSltWr_n;   -- 1=write, 0=read
+        wrt <= not BusWr_n;   -- 1=write, 0=read
       end if;
 
       ireq <= req;
@@ -1269,130 +1069,26 @@ begin
   ErmReq <= req when mem = '1' and iSltErm = '1'              else '0'; -- MEM:       / ESE-RAM, MegaSD
   RtcReq <= req when mem = '0' and adr(7 downto 1) = "1011010" else '0';-- I/O:B4-B5h / RTC(RP-5C01)
 
-  BusDir <= '1' when pSltAdr(7 downto 2) = "100010"  and SelfMode = '0' else  -- I/O:88-8Bh / VDP(V9958)
-            '1' when pSltAdr(7 downto 2) = "100110"  and SelfMode = '1' else  -- I/O:98-9Bh / VDP(V9958)
-            '1' when pSltAdr(7 downto 2) = "101000"  and SelfMode = '1' else  -- I/O:A0-A3h / PSG(AY-3-8910)
-            '1' when pSltAdr(7 downto 2) = "101010"  and SelfMode = '1' else  -- I/O:A8-ABh / PPI(8255)
-            '1' when pSltAdr(7 downto 2) = "110110"  and SelfMode = '1' else  -- I/O:D8-DBh / Kanji
-            '1' when pSltAdr(7 downto 2) = "111111"  and SelfMode = '1' else  -- I/O:FC-FFh / Memory-mapper
-            '1' when pSltAdr(7 downto 1) = "1011010" and SelfMode = '1' else  -- I/O:B4-B5h / RTC(RP-5C01)
+  BusDir <= '1' when BusAdr(7 downto 2) = "100010"  and SelfMode = '0' else  -- I/O:88-8Bh / VDP(V9958)
+            '1' when BusAdr(7 downto 2) = "100110"  and SelfMode = '1' else  -- I/O:98-9Bh / VDP(V9958)
+            '1' when BusAdr(7 downto 2) = "101000"  and SelfMode = '1' else  -- I/O:A0-A3h / PSG(AY-3-8910)
+            '1' when BusAdr(7 downto 2) = "101010"  and SelfMode = '1' else  -- I/O:A8-ABh / PPI(8255)
+            '1' when BusAdr(7 downto 2) = "110110"  and SelfMode = '1' else  -- I/O:D8-DBh / Kanji
+            '1' when BusAdr(7 downto 2) = "111111"  and SelfMode = '1' else  -- I/O:FC-FFh / Memory-mapper
+            '1' when BusAdr(7 downto 1) = "1011010" and SelfMode = '1' else  -- I/O:B4-B5h / RTC(RP-5C01)
             '0';
 
 
-  ----------------------------------------------------------------
-  -- Test for on-screen-display
-  ----------------------------------------------------------------
-  process(clk21m, reset)
-    constant str : string := "ESE MSX-SYSTEM3 [2006/11/23]";
-    variable state    : std_logic_vector(3 downto 0);
-    variable x : std_logic_vector(4 downto 0);
-  begin
-    if (reset = '1') then
-      osdCharWrReq <= '0';
-      osdCharCodeIn <= (others => '0');
-      osdLocateX <= (others => '0');
-      osdLocateY <= (others => '0');
-      x := (others => '0');
-    elsif (clk21m'event and clk21m = '1') then
-      case state is
-        when X"0" =>
-          osdLocateX <= (others => '0');
-          x := (others => '0');
-          state := X"1";
-        when X"1" =>
-          osdCharCodeIn <= char_to_std_logic_vector(str(conv_integer(x)+1));
-          osdCharWrReq <= not osdCharWrAck;
-          state := X"2";
-        when X"2" =>
-          -- waiting wr ack
-          if( osdCharWrReq = osdCharWrAck ) then
---          if( osdLocateX = str'length -1) then
-            if( osdLocateX = 27) then
-              state := X"3";
-            else
-              state := X"1";
-              x := x+1;
-              osdLocateX <= osdLocateX + 1;
-            end if;
-          end if;
-        when X"3" =>
-          null;
-        when others => null;
-      end case;
-      osdLocateY <= (others => '0');
-    end if;
-  end process;
 
 
   ----------------------------------------------------------------
-  -- Video output
+  -- Video output (TN9K: VGA 31kHz, full amplitude, fixed)
   ----------------------------------------------------------------
-  process (clk21m)
-
-    variable iReso      : std_logic;
-    variable DispSel    : std_logic_vector(1 downto 0);
-    variable DispSum    : std_logic_vector(1 downto 0);  -- TN9K: restore 2-bit sum
-
-  begin
-
-    if (clk21m'event and clk21m = '1') then
-
-      
-      --case (DispMode + DispSel) is 
-      DispSum := DispMode + DispSel;  -- TN9K: original semantics (AL concat was 4-bit)
-      case DispSum is
-        when "00" =>    -- TV 15KHz
-          pDac_VR <= videoC;
-          pDac_VG <= videoY;
-          pDac_VB <= videoV;
-          Reso_v  <= '0';   -- Hsync:15kHz
-          pVideoHS_n <= VideoHS_n;
-          pVideoVS_n <= VideoVS_n;
-
-        when "01" =>    -- RGB 15kHz (Half amplitude)
-          pDac_VR <= '0' & VideoR(5 downto 1);
-          pDac_VG <= '0' & VideoG(5 downto 1);
-          pDac_VB <= '0' & VideoB(5 downto 1);
-          Reso_v  <= '0';   -- Hsync:15kHz
-          pVideoHS_n <= VideoCS_n;
-          pVideoVS_n <= DACout; -- Audio
-
-        when "10" =>    -- VGA 31KHz (Half amplitude)
-          pDac_VR <= '0' & VideoR(5 downto 1);
-          pDac_VG <= '0' & VideoG(5 downto 1);
-          pDac_VB <= '0' & VideoB(5 downto 1);
-          Reso_v  <= '1';   -- Hsync:31kHz
-          pVideoHS_n <= VideoHS_n;
-          pVideoVS_n <= VideoVS_n;
-
-        when others =>  -- VGA 31kHz (Full amplitude)
-          pDac_VR <= VideoR;
-          pDac_VG <= VideoG;
-          pDac_VB <= VideoB;
-          Reso_v  <= '1';   -- Hsync:31kHz
-          pVideoHS_n <= VideoHS_n;
-          pVideoVS_n <= VideoVS_n;
-      end case;
-
-      if (reset = '1') then
-          DispSel := ( others => '0' );
-      elsif (iReso /= Reso) then
-        if Fkeys(7) = '0' then
-          DispSel := DispSel + 1;
-        else
-          DispSel := DispSel - 1;
-        end if;
-      end if;
-      iReso := Reso;
-
-    end if;
-  end process;
-
-  DispMode(1)<= iDipLed(0);
-  DispMode(0)<= iDipLed(1);
-
-  pVideoClk <= 'Z';
-  pVideoDat <= 'Z';
+  pVideoR    <= VideoR;
+  pVideoG    <= VideoG;
+  pVideoB    <= VideoB;
+  pVideoHS_n <= VideoHS_n;
+  pVideoVS_n <= VideoVS_n;
 
 
   ----------------------------------------------------------------
@@ -1481,26 +1177,11 @@ begin
 
   end process;
 
-  pDac_SL <= DACout & DACout & DACout & DACout & DACout & DACout;
+  pAudio <= DACout;
 
 
-  ----------------------------------------------------------------
-  -- Cassette Magnetic Tape (CMT) interface
-  ----------------------------------------------------------------
-  process(clk21m)
-  begin
-    if (clk21m'event and clk21m = '1') then
-      if (RchMode = '0') then
-        pDac_SR(5 downto 4) <= "ZZ";
-        pDac_SR(3 downto 1) <= CmtIn & (not CmtIn) & '0';
-        pDac_SR(0) <= CmtOut;
-        CmtIn <= pDac_SR(5);
-      else
-        pDac_SR <= DACout & DACout & DACout & DACout & DACout & DACout;
-        CmtIn <= '0';   -- CMT data input : always '0' on MSX turboR
-      end if;
-    end if;
-  end process;
+  -- TN9K: cassette interface removed (CMT input reads '0', as on turboR)
+  CmtIn <= '0';
 
 
   ----------------------------------------------------------------
@@ -1739,104 +1420,117 @@ begin
   pMemDat   <= SdrDat;
 
 
-  ----------------------------------------------------------------
-  -- Reserved ports (USB)
-  ----------------------------------------------------------------
-  pUsbP1    <= 'Z';
-  pUsbN1    <= 'Z';
-  pUsbP2    <= 'Z';
-  pUsbN2    <= 'Z';
 
 
   ----------------------------------------------------------------
   -- Connect components
   ----------------------------------------------------------------
-  U00 : pll4x
-    port map(
-      inclk0 => pClk21m,        -- 21.48MHz external
-      c0     => clk21m,         -- 21.48MHz internal
-      c1     => memclk,         -- 85.92MHz = 21.48MHz x 4
-      e0     => pMemClk         -- 85.92MHz external
-    );
-
   U01 : t80a
     port map(
-      RESET_n => pSltRst_n,
-      CLK_n   => pSltClk,
-      WAIT_n  => pSltWait_n,
-      INT_n   => pSltInt_n,
+      RESET_n => reset_n,
+      CLK_n   => cpuclk,
+      WAIT_n  => BusWait_n,
+      INT_n   => pVdpInt_n,
       NMI_n   => '1',
       BUSRQ_n => BusReq_n,
       M1_n    => CpuM1_n,
-      MREQ_n  => pSltMerq_n,
-      IORQ_n  => pSltIorq_n,
-      RD_n    => pSltRd_n,
-      WR_n    => pSltWr_n,
+      MREQ_n  => BusMerq_n,
+      IORQ_n  => BusIorq_n,
+      RD_n    => BusRd_n,
+      WR_n    => BusWr_n,
       RFSH_n  => CpuRfsh_n,
       HALT_n  => open,
       BUSAK_n => open,
-      A       => pSltAdr,
-      D       => pSltDat
+      A       => BusAdr,
+      DI      => BusDat,
+      DO      => CpuDo,
+      DOE     => CpuDoe
     );
-    BusReq_n  <= '1' when SelfMode = '1' else '0';
+    BusReq_n  <= '1';
 
   U02 : iplrom
     port map(clk21m, adr, RomDbi);
 
   U03 : megasd
-    port map(clk21m, reset, clkena, ErmReq, ErmAck, wrt, adr, ErmDbi, dbo, 
-             ErmRam, ErmWrt, ErmAdr, RamDbi, ErmDbo, 
-             MmcDbi, MmcEna, MmcAct, pSd_Ck, pSd_Dt(3), pSd_Cm, pSd_Dt(0), 
+    port map(clk21m, reset, clkena, ErmReq, ErmAck, wrt, adr, ErmDbi, dbo,
+             ErmRam, ErmWrt, ErmAdr, RamDbi, ErmDbo,
+             MmcDbi, MmcEna, MmcAct, pSd_Ck, pSd_Cs, pSd_Cm, pSd_Do,
              EPC_CK, EPC_CS, EPC_OE, EPC_DI, EPC_DO);
-    pSd_Dt(2 downto 0) <= (others => 'Z');
 
-  
---  U04 : cyclone_asmiblock
---    port map(EPC_CK, EPC_CS, EPC_DI, EPC_OE, EPC_DO);
-    
-    
+  -- BIOS flash: the former Altera EPCS port goes straight to a SPI flash
+  pEpc_Ck <= EPC_CK;
+  pEpc_Cs <= EPC_CS;
+  pEpc_Di <= EPC_DI;
+  EPC_DO  <= pEpc_Do;
 
   U05 : mapper
-    port map(clk21m, reset, clkena, MapReq, MapAck, mem, wrt, adr, MapDbi, dbo, 
+    port map(clk21m, reset, clkena, MapReq, MapAck, mem, wrt, adr, MapDbi, dbo,
              MapRam, MapWrt, MapAdr, RamDbi, MapDbo);
 
   U06 : eseps2
-    port map (clk21m, reset, clkena, Kmap, Caps, Kana, Paus, open, Reso, Fkeys, 
+    port map (clk21m, reset, clkena, Kmap, Caps, Kana, Paus, open, Reso, Fkeys,
               pPs2Clk, pPs2Dat, PpiPortC, PpiPortB);
 
-  U07 : rtc
-    port map(clk21m, reset, clkena, RtcReq, RtcAck, wrt, adr, RtcDbi, dbo);
+  G_RTC : if ENABLE_RTC generate
+    U07 : rtc
+      port map(clk21m, reset, clkena, RtcReq, RtcAck, wrt, adr, RtcDbi, dbo);
+  end generate;
+  G_NO_RTC : if not ENABLE_RTC generate
+    RtcAck <= RtcReq;
+    RtcDbi <= (others => '1');
+  end generate;
 
-  U08 : kanji
-    port map(clk21m, reset, clkena, KanReq, KanAck, wrt, adr, KanDbi, dbo, 
-             KanRom, KanAdr, RamDbi, KanDbo);
+  G_KANJI : if ENABLE_KANJI generate
+    U08 : kanji
+      port map(clk21m, reset, clkena, KanReq, KanAck, wrt, adr, KanDbi, dbo,
+               KanRom, KanAdr, RamDbi, KanDbo);
+  end generate;
+  G_NO_KANJI : if not ENABLE_KANJI generate
+    KanAck <= KanReq;
+    KanDbi <= (others => '1');
+    KanRom <= '0';
+    KanAdr <= (others => '0');
+    KanDbo <= (others => '0');
+  end generate;
 
   U20 : vdp
     port map(
-      clk21m, reset, VdpReq, VdpAck, wrt, adr, VdpDbi, dbo, pVdpInt_n, 
+      clk21m, reset, VdpReq, VdpAck, wrt, adr, VdpDbi, dbo, pVdpInt_n,
       OeVdp_n, WeVdp_n, VdpAdr, VrmDbi, VrmDbo,
-      VideoR, VideoG, VideoB, VideoHS_n, VideoVS_n, VideoCS_n, 
-      VideoDHClk, VideoDLClk, open, open, Reso_v, Fkeys(0),
-      osdLocateX, osdLocateY, osdCharCodeIn, osdCharWrReq, osdCharWrAck
-    );
-
-  U21 : vencode
-    port map(
-      clk21m, reset, VideoR, VideoG, videoB, VideoHS_n, VideoVS_n,
-      videoY, videoC, videoV
+      VideoR, VideoG, VideoB, VideoHS_n, VideoVS_n,
+      VideoDHClk, VideoDLClk
     );
 
   U30 : psg
-    port map(clk21m, reset, clkena, PsgReq, PsgAck, wrt, adr, PsgDbi, dbo, 
+    port map(clk21m, reset, clkena, PsgReq, PsgAck, wrt, adr, PsgDbi, dbo,
              pJoyA, pStrA, pJoyB, pStrB, Kana, CmtIn, KeyMode, PsgAmp);
 
-  U31 : megaram
-    port map(clk21m, reset, clkena, SccReq, SccAck, wrt, adr, SccDbi, dbo, 
-             SccRam, SccWrt, SccAdr, RamDbi, SccDbo, MegType, SccAmpL, SccAmpR);
+  G_SCC : if ENABLE_SCC generate
+    U31 : megaram
+      port map(clk21m, reset, clkena, SccReq, SccAck, wrt, adr, SccDbi, dbo,
+               SccRam, SccWrt, SccAdr, RamDbi, SccDbo, MegType, SccAmpL, SccAmpR);
+  end generate;
+  G_NO_SCC : if not ENABLE_SCC generate
+    -- MegType is forced to "00", so slot 2 is never decoded as SCC
+    SccAck  <= SccReq;
+    SccDbi  <= (others => '1');
+    SccRam  <= '0';
+    SccWrt  <= '0';
+    SccAdr  <= (others => '0');
+    SccDbo  <= (others => '0');
+    SccAmpL <= (others => '0');
+    SccAmpR <= (others => '0');
+  end generate;
 
-  U32 : eseopll
-    port map(clk21m, reset, clkena, OpllEnaWait, OpllReq, OpllAck, wrt, adr, dbo, OpllAmp);
-    OpllEnaWait <= '1' when clksel /= "00" else '0';
+  G_OPLL : if ENABLE_OPLL generate
+    U32 : eseopll
+      port map(clk21m, reset, clkena, OpllEnaWait, OpllReq, OpllAck, wrt, adr, dbo, OpllAmp);
+  end generate;
+  G_NO_OPLL : if not ENABLE_OPLL generate
+    OpllAck <= OpllReq;
+    OpllAmp <= (OpllAmp'high => '1', others => '0');   -- OPLL zero level
+  end generate;
+  OpllEnaWait <= '1' when clksel /= "00" else '0';
 
   U33: esepwm
     generic map ( DAC_MSBI ) port map (clk21m, reset, DACin, DACout);

@@ -46,9 +46,11 @@ entity psg is
     dbi     : out std_logic_vector(7 downto 0);
     dbo     : in std_logic_vector(7 downto 0);
 
-    joya    : inout std_logic_vector(5 downto 0);
+    -- TN9K: joystick pins are inputs only (no internal tri-states).
+    -- Pins 6/7 open-collector outputs (PSG reg#15) are modelled on read.
+    joya    : in  std_logic_vector(5 downto 0);
     stra    : out std_logic;
-    joyb    : inout std_logic_vector(5 downto 0);
+    joyb    : in  std_logic_vector(5 downto 0);
     strb    : out std_logic;
 
     kana    : out std_logic;
@@ -104,8 +106,6 @@ begin
       PsgRegPtr <= (others => '0');
       RegA      <= (others => '0');
       RegB      <= (others => '0');
-      JoyA      <= (others => 'Z');
-      JoyB      <= (others => 'Z');
       kana      <= '0';
 
     elsif (clk21m'event and clk21m = '1') then
@@ -131,31 +131,16 @@ begin
       end if;
 
       -- PSG register #15 bit6 - JoyStick select : 0=PortA, 1=PortB
+      -- pins 6/7 read '0' when PSG reg#15 drives them low (open collector)
       if (RegB(6) = '0') then
-        RegA(5 downto 0) <= JoyA;
+        RegA(5 downto 0) <= (JoyA(5) and RegB(1)) & (JoyA(4) and RegB(0)) & JoyA(3 downto 0);
       else
-        RegA(5 downto 0) <= JoyB;
+        RegA(5 downto 0) <= (JoyB(5) and RegB(3)) & (JoyB(4) and RegB(2)) & JoyB(3 downto 0);
       end if;
 
       -- Strobe output
       StrB <= RegB(5);
       StrA <= RegB(4);
-
-      -- Trigger A/B output Joystick PortA
-      case RegB(1 downto 0) is
-        when "00"   => JoyA(5 downto 4) <= "00";
-        when "01"   => JoyA(5 downto 4) <= "0Z";
-        when "10"   => JoyA(5 downto 4) <= "Z0";
-        when others => JoyA(5 downto 4) <= "ZZ";
-      end case;
-
-      -- Trigger A/B output Joystick PortB
-      case RegB(3 downto 2) is
-        when "00"   => JoyB(5 downto 4) <= "00";
-        when "01"   => JoyB(5 downto 4) <= "0Z";
-        when "10"   => JoyB(5 downto 4) <= "Z0";
-        when others => JoyB(5 downto 4) <= "ZZ";
-      end case;
 
     end if;
 
