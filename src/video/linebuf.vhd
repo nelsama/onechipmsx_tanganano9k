@@ -95,7 +95,7 @@ end linebuf;
 
 architecture RTL of linebuf is
 --  type Mem is array (639 downto 0) of std_logic_vector(5 downto 0);
-  type Mem is array (639 downto 0) of std_logic_vector(3 downto 0);
+  type Mem is array (1023 downto 0) of std_logic_vector(3 downto 0);  -- TN9K: full 10-bit range (was 640; writes during blanking overflowed in simulation)
   signal iMem  : Mem;
   signal iAddress : std_logic_vector(9 downto 0);
 
