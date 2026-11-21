@@ -98,6 +98,9 @@ end spinforam;
 architecture RTL of spinforam is
   type Mem is array (7 downto 0) of std_logic_vector(31 downto 0);
   signal iMem  : Mem;
+  -- TN9K: synchronous read -> block RAM (saves LUT-RAM on the GW1NR-9)
+  attribute syn_ramstyle : string;
+  attribute syn_ramstyle of iMem : signal is "block_ram";
   signal iAddress : std_logic_vector(2 downto 0);
 
   begin

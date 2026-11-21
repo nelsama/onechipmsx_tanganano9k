@@ -48,6 +48,9 @@ architecture RTL of PhaseMemory is
 
   type PHASE_ARRAY_TYPE is array (0 to MAXSLOT-1) of PHASE_TYPE;
   signal phase_array : PHASE_ARRAY_TYPE;
+  -- TN9K: synchronous read -> block RAM (saves LUT-RAM on the GW1NR-9)
+  attribute syn_ramstyle : string;
+  attribute syn_ramstyle of phase_array : signal is "block_ram";
 
 begin
 

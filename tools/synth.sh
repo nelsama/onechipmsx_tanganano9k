@@ -12,6 +12,10 @@
 #             GENERICS="ENABLE_OPLL=false ENABLE_RTC=false"
 #             (applied to a copy of src/emsx_core.vhd inside build/<name>)
 #
+#   PNR=1     also place & route (+ bitstream) with src/board/tn9k.cst/.sdc,
+#             e.g. TOP=tn9k_top PNR=1 tools/synth.sh tn9k 9k
+#             bitstream: build/<name>/impl/pnr/<top>.fs
+#
 # Prints: Logic used/8640 (= LUT + ALU + 6*SSRAM), registers, BSRAM.
 # Per-module breakdown: build/<name>/impl/gwsynthesis/*_syn_rsc.xml
 set -euo pipefail
@@ -25,6 +29,7 @@ case "${2:-9k}" in
   *)   echo "unknown device '$2'" >&2; exit 2 ;;
 esac
 TOP=${TOP:-emsx_core}
+PNR=${PNR:-0}
 GENERICS=${GENERICS:-}
 
 OUT="$ROOT/build/$NAME"
@@ -52,7 +57,15 @@ fi
   echo "set_option -top_module $TOP"
   echo "set_option -vhdl_std vhd1993"
   echo "set_option -output_base_name $TOP"
-  echo "run syn"
+  if [ "$PNR" = 1 ]; then
+    echo "add_file -type cst $WIN_ROOT/src/board/tn9k.cst"
+    echo "add_file -type sdc $WIN_ROOT/src/board/tn9k.sdc"
+    echo "set_option -use_mspi_as_gpio 1"
+    echo "set_option -timing_driven 1"
+    echo "run all"
+  else
+    echo "run syn"
+  fi
 } > "$OUT/syn.tcl"
 
 cd "$OUT"
@@ -68,4 +81,11 @@ if [ -f "$RPT" ]; then
     paste -sd' ' | sed 's/^/resources: /'
 fi
 echo "warnings: $(grep -c '^WARN' syn.out || true)   exit=$rc   log=$OUT/syn.out"
+if [ "$PNR" = 1 ]; then
+  PR="impl/pnr/${TOP}.rpt.txt"
+  [ -f "$PR" ] && grep -E '^\s*(Logic|Register|BSRAM|PLL|CLKDIV)' "$PR" | head -8 | sed 's/^/pnr: /'
+  TR="impl/pnr/${TOP}_tr_content.html"
+  [ -f "$TR" ] && echo "timing report: $OUT/$TR"
+  ls impl/pnr/*.fs 2>/dev/null | sed 's/^/bitstream: /'
+fi
 exit $rc

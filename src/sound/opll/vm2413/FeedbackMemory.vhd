@@ -53,6 +53,9 @@ architecture RTL of FeedbackMemory is
 
   type SIGNED_LI_ARRAY_TYPE is array (0 to MAXCH-1) of SIGNED_LI_VECTOR_TYPE;
   signal data_array : SIGNED_LI_ARRAY_TYPE;
+  -- TN9K: synchronous read -> block RAM (saves LUT-RAM on the GW1NR-9)
+  attribute syn_ramstyle : string;
+  attribute syn_ramstyle of data_array : signal is "block_ram";
   
 begin
 

@@ -1190,12 +1190,25 @@ begin
   -- CPU memory: same request / acknowledge as the original RamReq / RamAck.
   -- Address map (CpuAdr, see above): 0x400000-0x6FFFFF, bit 22 is always 1,
   -- so the die gets CpuAdr(21 downto 0).
-  pRamReq <= RamReq;
-  pRamWr  <= '1' when (SccWrt = '1' and iSltScc = '1') or
-                      (ErmWrt = '1' and iSltErm = '1') or
-                      (MapWrt = '1' and iSltMap = '1') else '0';
-  pRamAdr <= CpuAdr(21 downto 0);
-  pRamDbo <= dbo;
+  -- The request is registered here: the slot / mapper decoding behind
+  -- RamReq and CpuAdr is too deep for the memclk domain (1 memclk = 1/4 or
+  -- 1/5 of clk21m). It costs one clk21m of latency (the Z80 samples the
+  -- read data ~420 ns after MREQ; the PSRAM answers in ~250 ns).
+  process(clk21m)
+  begin
+    if (clk21m'event and clk21m = '1') then
+      pRamReq <= RamReq;
+      if ((SccWrt = '1' and iSltScc = '1') or
+          (ErmWrt = '1' and iSltErm = '1') or
+          (MapWrt = '1' and iSltMap = '1')) then
+        pRamWr <= '1';
+      else
+        pRamWr <= '0';
+      end if;
+      pRamAdr <= CpuAdr(21 downto 0);
+      pRamDbo <= dbo;
+    end if;
+  end process;
   RamDbi  <= pRamDbi;
   RamAck  <= pRamAck and RamReq;
 

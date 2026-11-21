@@ -51,6 +51,9 @@ architecture RTL of RegisterMemory is
   type REGS_ARRAY_TYPE is array (0 to 8) of REGS_VECTOR_TYPE;
   --type REGS_ARRAY_TYPE is array (CH_TYPE'range) of REGS_VECTOR_TYPE;
   signal rarray : REGS_ARRAY_TYPE;
+  -- TN9K: synchronous read -> block RAM (saves LUT-RAM on the GW1NR-9)
+  attribute syn_ramstyle : string;
+  attribute syn_ramstyle of rarray : signal is "block_ram";
   
 begin
 

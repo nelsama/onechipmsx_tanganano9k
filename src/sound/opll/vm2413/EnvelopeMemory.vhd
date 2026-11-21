@@ -49,6 +49,9 @@ architecture RTL of EnvelopeMemory is
 
   type EGDATA_ARRAY is array (0 to MAXSLOT-1) of EGDATA_VECTOR_TYPE;
   signal egdata_set : EGDATA_ARRAY;
+  -- TN9K: synchronous read -> block RAM (saves LUT-RAM on the GW1NR-9)
+  attribute syn_ramstyle : string;
+  attribute syn_ramstyle of egdata_set : signal is "block_ram";
   
 begin
 
