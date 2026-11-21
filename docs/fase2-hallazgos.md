@@ -15,7 +15,9 @@ hi631/tang-nano-9K (NES_TN9.cst), lfantoniosi/tn_vdp (v9958.cst).
 | Flash SPI CS / CLK / MOSI / MISO | 60 / 59 / 61 / 62 | LVCMOS33 |
 | UART TX / RX (USB-UART) | 17 / 18 | LVCMOS33 |
 | PS/2 clk / dat (como en hi631) | 25 / 26 | LVCMOS33 |
-| Audio PWM (como en hi631) | 30 | LVCMOS33 |
+| Audio PWM L / R (mono en ambos, como en pengo_arcade) | 77 / 76 | LVCMOS33 |
+| Joystick arriba / abajo / izq. / der. / fuego (como en pengo_arcade) | 30 / 33 / 34 / 40 / 29 | LVCMOS33, pull-up |
+| Botón 2 (disparo B) / botón 3 (tecla ESPACIO) | 35 / 42 | LVCMOS33, pull-up |
 | Otros 1,8 V | 83-86 | LVCMOS18 |
 
 PSRAM integrada: puertos del top con nombres fijos, **sin** entradas en el .cst:

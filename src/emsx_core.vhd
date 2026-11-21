@@ -77,6 +77,8 @@ entity emsx_core is
     pStrA       : out std_logic;
     pJoyB       : in  std_logic_vector( 5 downto 0);
     pStrB       : out std_logic;
+    -- TN9K: extra button pressed = SPACE key ('0' = pressed)
+    pKeySpace_n : in  std_logic;
 
     -- SD card (SPI mode)
     pSd_Ck      : out std_logic;                        -- CLK
@@ -483,6 +485,7 @@ architecture rtl of emsx_core is
   signal PpiDbi      : std_logic_vector(7 downto 0);
   signal PpiPortA    : std_logic_vector(7 downto 0);
   signal PpiPortB    : std_logic_vector(7 downto 0);
+  signal KbdKeyX     : std_logic_vector(7 downto 0);
   signal PpiPortC    : std_logic_vector(7 downto 0);
 
   -- PS/2 signals
@@ -1268,7 +1271,11 @@ begin
 
   U06 : eseps2
     port map (clk21m, reset, clkena, Kmap, Caps, Kana, Paus, open, Reso, Fkeys,
-              pPs2Clk, pPs2Dat, PpiPortC, PpiPortB);
+              pPs2Clk, pPs2Dat, PpiPortC, KbdKeyX);
+
+  -- TN9K: the extra button acts as SPACE (row 8, bit 0, active low)
+  PpiPortB <= KbdKeyX(7 downto 1) & (KbdKeyX(0) and pKeySpace_n)
+                when PpiPortC(3 downto 0) = "1000" else KbdKeyX;
 
   G_RTC : if ENABLE_RTC generate
     U07 : rtc

@@ -62,6 +62,8 @@ fi
     echo "add_file -type sdc $WIN_ROOT/src/board/tn9k.sdc"
     echo "set_option -use_mspi_as_gpio 1"
     echo "set_option -timing_driven 1"
+    echo "set_option -place_option ${PLACE_OPT:-0}"
+    echo "set_option -route_option ${ROUTE_OPT:-0}"
     echo "run all"
   else
     echo "run syn"

@@ -60,6 +60,25 @@ IO_PORT "ps2_clk" IO_TYPE=LVCMOS33 PULL_MODE=UP;
 IO_LOC "ps2_dat" 26;
 IO_PORT "ps2_dat" IO_TYPE=LVCMOS33 PULL_MODE=UP;
 
-// --- Audio (PWM) -----------------------------------------------------------
-IO_LOC "audio" 30;
-IO_PORT "audio" IO_TYPE=LVCMOS33 DRIVE=8;
+// --- Joystick (MSX port A) + 2 extra buttons (3.3 V, pull-up) ----------
+// (joystick pins as in pengo_arcade)
+IO_LOC "joy_up" 30;
+IO_PORT "joy_up" IO_TYPE=LVCMOS33 PULL_MODE=UP;
+IO_LOC "joy_down" 33;
+IO_PORT "joy_down" IO_TYPE=LVCMOS33 PULL_MODE=UP;
+IO_LOC "joy_left" 34;
+IO_PORT "joy_left" IO_TYPE=LVCMOS33 PULL_MODE=UP;
+IO_LOC "joy_right" 40;
+IO_PORT "joy_right" IO_TYPE=LVCMOS33 PULL_MODE=UP;
+IO_LOC "joy_fire" 29;
+IO_PORT "joy_fire" IO_TYPE=LVCMOS33 PULL_MODE=UP;
+IO_LOC "joy_btn2" 35;
+IO_PORT "joy_btn2" IO_TYPE=LVCMOS33 PULL_MODE=UP;
+IO_LOC "joy_btn3" 42;
+IO_PORT "joy_btn3" IO_TYPE=LVCMOS33 PULL_MODE=UP;
+
+// --- Audio (PWM, mono on both channels; as in pengo_arcade) ---------------
+IO_LOC "audio_l" 77;
+IO_PORT "audio_l" IO_TYPE=LVCMOS33 DRIVE=8;
+IO_LOC "audio_r" 76;
+IO_PORT "audio_r" IO_TYPE=LVCMOS33 DRIVE=8;

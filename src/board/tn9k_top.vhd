@@ -16,6 +16,10 @@
 -- Reset: power-on, S1 (pin 4) and "PSRAM not ready" hold the MSX in reset.
 -- S1 does not reset the PSRAM (it keeps its configuration).
 --
+-- Joystick: pins of the pengo_arcade board (up 30, down 33, left 34,
+-- right 40, fire 29) + button 2 (pin 35, trigger B) and button 3 (pin 42,
+-- SPACE key). Audio: mono PWM on both L (77) and R (76).
+--
 -- LEDs (active low): 0 SD access, 1 VRAM overrun (sticky), 2 PSRAM not
 -- ready, 3 HDMI not locked to the VDP, 4 MSX in reset, 5 heartbeat (~1 Hz).
 --
@@ -55,8 +59,18 @@ entity tn9k_top is
     ps2_clk     : inout std_logic;
     ps2_dat     : inout std_logic;
 
-    -- audio (1-bit PWM, RC filter outside)
-    audio       : out   std_logic;
+    -- joystick (MSX port A) and extra buttons, active low with pull-ups
+    joy_up      : in    std_logic;
+    joy_down    : in    std_logic;
+    joy_left    : in    std_logic;
+    joy_right   : in    std_logic;
+    joy_fire    : in    std_logic;    -- button 1 = trigger A
+    joy_btn2    : in    std_logic;    -- button 2 = trigger B
+    joy_btn3    : in    std_logic;    -- button 3 = SPACE key
+
+    -- audio (1-bit PWM, RC filter outside): the MSX is mono, same on L and R
+    audio_l     : out   std_logic;
+    audio_r     : out   std_logic;
 
     -- embedded PSRAM (fixed names, no .cst entries)
     O_psram_ck      : out   std_logic_vector(1 downto 0);
@@ -120,6 +134,9 @@ architecture rtl of tn9k_top is
   signal hhs, hvs, hde, hlocked : std_logic;
 
   signal led_sd : std_logic;
+  signal audio  : std_logic;
+  -- joystick: bit 0 up, 1 down, 2 left, 3 right, 4 trigger A, 5 trigger B
+  signal joy_s1, joy_s2 : std_logic_vector(6 downto 0) := (others => '1');
   signal beat   : unsigned(24 downto 0) := (others => '0');
 
 begin
@@ -185,6 +202,18 @@ begin
   end process;
   pix_rst <= pix_rst_sr(3);
 
+  -- joystick / buttons synchronised to clk21m
+  process(clk21m)
+  begin
+    if rising_edge(clk21m) then
+      joy_s1 <= joy_btn3 & joy_btn2 & joy_fire & joy_right & joy_left & joy_down & joy_up;
+      joy_s2 <= joy_s1;
+    end if;
+  end process;
+
+  audio_l <= audio;
+  audio_r <= audio;
+
   ----------------------------------------------------------------
   -- MSX
   ----------------------------------------------------------------
@@ -205,10 +234,11 @@ begin
       pRamAck   => ram_ack,
       pPs2Clk   => ps2_clk,
       pPs2Dat   => ps2_dat,
-      pJoyA     => (others => '1'),
+      pJoyA     => joy_s2(5 downto 0),
       pStrA     => open,
       pJoyB     => (others => '1'),
       pStrB     => open,
+      pKeySpace_n => joy_s2(6),
       pSd_Ck    => sd_sck,
       pSd_Cm    => sd_cmd,
       pSd_Cs    => sd_cs,

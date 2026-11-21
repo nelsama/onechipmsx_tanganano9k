@@ -29,6 +29,7 @@ set_clock_groups -asynchronous -group [get_clocks {clk27}] -group [get_clocks {m
 
 // asynchronous inputs (sampled / synchronised)
 set_false_path -from [get_ports {btn_s1_n btn_s2_n sd_dat0 flash_miso ps2_clk ps2_dat}]
+set_false_path -from [get_ports {joy_up joy_down joy_left joy_right joy_fire joy_btn2 joy_btn3}]
 
 // psram_msx hands the VRAM read word to the VDP (dbi0) only on the memclk
 // edge that coincides with a clk21m edge (E0 + 5 clk21m), and the VDP
@@ -44,3 +45,6 @@ set_multicycle_path -from [get_regs {u_mem/dbi0*}] -hold -start 3
 // margin, the data path itself is ~12 ns.)
 set_multicycle_path -from [get_regs {u_mem/dbi_i*}] -to [get_clocks {cpuclk}] -setup -end 2
 set_multicycle_path -from [get_regs {u_mem/dbi_i*}] -to [get_clocks {cpuclk}] -hold -end 1
+// (the same CPU read data also reaches clk21m registers, e.g. the bus latch)
+set_multicycle_path -from [get_regs {u_mem/dbi_i*}] -to [get_clocks {clk21m}] -setup -start 4
+set_multicycle_path -from [get_regs {u_mem/dbi_i*}] -to [get_clocks {clk21m}] -hold -start 3
