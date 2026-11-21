@@ -1,1 +1,6 @@
 build/
+# Gowin IDE outputs (the project file and impl/*_process_config.json are kept)
+impl/gwsynthesis/
+impl/pnr/
+impl/temp/
+*.gprj.user
