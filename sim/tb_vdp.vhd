@@ -11,6 +11,10 @@
 --                  of the NEXT dot (the budget of the retimed VDP).
 --   DUMPFILE : per-clock dump of the VGA output of frame FRAMES
 --              (one line per clk21m: RRGGBB in hex, then HS VS)
+--   USE_PSRAM: 0 = the VRAM model below (latency LAT)
+--              1 = src/memory/psram_msx with sim/psram_chan_model (the
+--                  PSRAM controller as it will be on the board: memclk =
+--                  RATIO x clk21m, latency code LC, fixed 2x latency)
 --   CMDTEST  : run a VDP command (LMMV + HMMM) and a CPU VRAM write/read test
 --              before the dumped frame; VRAM is dumped to DUMPFILE & ".vram"
 --
@@ -23,6 +27,7 @@ use ieee.std_logic_1164.all;
 use ieee.std_logic_unsigned.all;
 use ieee.std_logic_arith.all;
 use std.textio.all;
+use work.psram_sim_pkg.all;
 
 entity tb_vdp is
   generic(
@@ -30,6 +35,9 @@ entity tb_vdp is
     LAT      : integer := 0;
     FRAMES   : integer := 3;
     CMDTEST  : integer := 0;
+    USE_PSRAM: integer := 0;
+    RATIO    : integer := 4;
+    LC       : integer := 3;
     DUMPFILE : string  := "vdp.dump"
   );
 end tb_vdp;
@@ -80,6 +88,19 @@ architecture sim of tb_vdp is
   signal VideoR, VideoG, VideoB : std_logic_vector(5 downto 0);
   signal VideoHS_n, VideoVS_n, DHClk, DLClk : std_logic;
 
+  -- PSRAM controller (USE_PSRAM = 1)
+  signal memclk    : std_logic := '0';
+  signal RamDbiM   : std_logic_vector(15 downto 0) := (others => '0');
+  signal RamDbiP   : std_logic_vector(15 downto 0);
+  signal VdpSlot   : std_logic;
+  signal psReady   : std_logic;
+  signal psOverrun : std_logic;
+  signal ps_ck, ps_ckn, ps_rstn, ps_csn : std_logic_vector(1 downto 0);
+  signal ps_rwds   : std_logic_vector(1 downto 0);
+  signal ps_dq     : std_logic_vector(15 downto 0);
+  signal ps_cpudbi : std_logic_vector(7 downto 0);
+  signal ps_cpuack : std_logic;
+
   signal setup_done : boolean := false;
   signal sim_done   : boolean := false;
   signal dump_vram  : boolean := false;
@@ -113,6 +134,22 @@ architecture sim of tb_vdp is
 begin
 
   clk21m <= not clk21m after TCLK/2 when not sim_done else '0';
+  -- memclk edges coincide with the clk21m edges (same PLL on the board)
+  memclk <= not memclk after TCLK/(2*RATIO) when not sim_done and USE_PSRAM = 1 else '0';
+
+  RamDbi  <= RamDbiP when USE_PSRAM = 1 else RamDbiM;
+  VdpSlot <= DHClk and DLClk;
+
+  U_PSRAM : entity work.psram_msx
+    generic map (FREQ => 21477270 * RATIO, LATENCY => LC, RATIO => RATIO)
+    port map (
+      clk => memclk, clk_p => memclk, resetn => '1', ready => psReady,
+      vdp_slot => VdpSlot, vdp_adr => RamAdr, vdp_we_n => RamWe_n,
+      vdp_dbo => RamDbo, vdp_dbi => RamDbiP, vdp_overrun => psOverrun,
+      cpu_req => '0', cpu_wr => '0', cpu_adr => (others => '0'),
+      cpu_dbo => (others => '0'), cpu_dbi => ps_cpudbi, cpu_ack => ps_cpuack,
+      O_psram_ck => ps_ck, O_psram_ck_n => ps_ckn, IO_psram_rwds => ps_rwds,
+      IO_psram_dq => ps_dq, O_psram_reset_n => ps_rstn, O_psram_cs_n => ps_csn);
 
   U_VDP : vdp port map(
     clk21m, reset, req, ack, wrt, adr, dbi, dbo, int_n,
@@ -175,6 +212,11 @@ begin
         poke(16#1E00# + s*4 + 2, conv_std_logic_vector(s * 4, 8));
         poke(16#1E00# + s*4 + 3, X"00");
       end loop;
+      if USE_PSRAM = 1 then
+        for i in 0 to 65535 loop
+          psram_write(0, i, mem(i));
+        end loop;
+      end if;
       inited := true;
     end if;
 
@@ -184,11 +226,11 @@ begin
         cnt := cnt - 1;
       end if;
       if cnt = 0 then
-        RamDbi <= pend;
+        RamDbiM <= pend;
         cnt := -1;
       end if;
       -- one VDP access per dot, taken at the edge that ends dotState "00"
-      if DHClk = '1' and DLClk = '1' then
+      if DHClk = '1' and DLClk = '1' and USE_PSRAM = 0 then
         a := conv_integer(RamAdr(15 downto 0));
         if RamWe_n = '0' then
           if RamAdr(16) = '0' then
@@ -198,7 +240,7 @@ begin
           end if;
         else
           if LAT = 0 then
-            RamDbi <= mem(a);
+            RamDbiM <= mem(a);
           else
             -- the bus keeps the previous word until this one "arrives"
             -- (a real controller holds its output register), so an early
@@ -213,7 +255,11 @@ begin
     if dump_vram and not vram_dumped and rising_edge(clk21m) then
       file_open(vf, DUMPFILE & ".vram", write_mode);
       for i in 0 to 65535 loop
-        write(l, hex(mem(i)));
+        if USE_PSRAM = 1 then
+          write(l, hex(psram_read(0, i)));
+        else
+          write(l, hex(mem(i)));
+        end if;
         writeline(vf, l);
       end loop;
       file_close(vf);
@@ -279,6 +325,9 @@ begin
   begin
     reset <= '1';
     for i in 1 to 20 loop wait until falling_edge(clk21m); end loop;
+    if USE_PSRAM = 1 then
+      while psReady /= '1' loop wait until falling_edge(clk21m); end loop;
+    end if;
     reset <= '0';
     for i in 1 to 20 loop wait until falling_edge(clk21m); end loop;
 
@@ -408,6 +457,9 @@ begin
           opened := true;
         elsif frame = FRAMES + 1 then
           file_close(df);
+          if USE_PSRAM = 1 then
+            write(l, string'("VRAM overrun: ")); write(l, bit_char(psOverrun)); writeline(output, l);
+          end if;
           opened := false;
           if CMDTEST /= 0 then
             dump_vram <= true;

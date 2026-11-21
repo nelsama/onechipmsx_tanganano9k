@@ -51,21 +51,22 @@ entity emsx_core is
   port(
     -- Clocks / reset (from board top)
     clk21m      : in std_logic;                         -- 21.48MHz (VDP / system)
-    memclk      : in std_logic;                         -- 85.92MHz (SD-RAM sequencer, = 4 x clk21m)
     reset_n     : in std_logic;                         -- synchronous to clk21m, active low
 
-    -- SD-RAM ports (temporary: replaced by the PSRAM interface in phase 3)
-    pMemCke     : out std_logic;                        -- SD-RAM Clock enable
-    pMemCs_n    : out std_logic;                        -- SD-RAM Chip select
-    pMemRas_n   : out std_logic;                        -- SD-RAM Row/RAS
-    pMemCas_n   : out std_logic;                        -- SD-RAM /CAS
-    pMemWe_n    : out std_logic;                        -- SD-RAM /WE
-    pMemUdq     : out std_logic;                        -- SD-RAM UDQM
-    pMemLdq     : out std_logic;                        -- SD-RAM LDQM
-    pMemBa1     : out std_logic;                        -- SD-RAM Bank select address 1
-    pMemBa0     : out std_logic;                        -- SD-RAM Bank select address 0
-    pMemAdr     : out std_logic_vector(12 downto 0);    -- SD-RAM Address
-    pMemDat     : inout std_logic_vector(15 downto 0);  -- SD-RAM Data
+    -- Memory (TN9K: PSRAM through src/memory/psram_msx.vhd)
+    --   VRAM, one access per dot (die 0)
+    pVramSlot   : out std_logic;                        -- VideoDHClk and VideoDLClk
+    pVramAdr    : out std_logic_vector(16 downto 0);    -- bit 16 = byte lane
+    pVramWe_n   : out std_logic;
+    pVramDbo    : out std_logic_vector(7 downto 0);
+    pVramDbi    : in  std_logic_vector(15 downto 0);
+    --   CPU memory, request / acknowledge (die 1)
+    pRamReq     : out std_logic;
+    pRamWr      : out std_logic;
+    pRamAdr     : out std_logic_vector(21 downto 0);    -- byte address
+    pRamDbo     : out std_logic_vector(7 downto 0);
+    pRamDbi     : in  std_logic_vector(7 downto 0);
+    pRamAck     : in  std_logic;
 
     -- PS/2 keyboard ports
     pPs2Clk     : inout std_logic;
@@ -380,8 +381,6 @@ architecture rtl of emsx_core is
   signal clkena      : std_logic;
   constant clksel    : std_logic_vector(1 downto 0) := "00";  -- TN9K: 3.58MHz only (no turbo)
   signal reset       : std_logic;
-  signal RstSeq      : std_logic_vector(4 downto 0) := (others => '0');
-  signal FreeCounter : std_logic_vector(15 downto 0) := (others => '0');
 
   -- MSX cartridge slot control signals
   signal BusDir      : std_logic;
@@ -575,29 +574,10 @@ architecture rtl of emsx_core is
   signal RamReq      : std_logic;
   signal RamAck      : std_logic;
   signal RamDbi      : std_logic_vector(7 downto 0);
-  signal ClrAdr      : std_logic_vector(17 downto 0);
   signal CpuAdr      : std_logic_vector(22 downto 0);
 
-  -- SD-RAM control signals
-  signal SdrSta      : std_logic_vector(2 downto 0);
-  signal SdrCmd      : std_logic_vector(3 downto 0);
-  signal SdrBa0      : std_logic;
-  signal SdrBa1      : std_logic;
-  signal SdrUdq      : std_logic;
-  signal SdrLdq      : std_logic;
-  signal SdrAdr      : std_logic_vector(12 downto 0);
-  signal SdrDat      : std_logic_vector(15 downto 0);
   signal SdPaus      : std_logic;
 
-  constant SdrCmd_de : std_logic_vector(3 downto 0) := "1111"; -- deselect
-  constant SdrCmd_pr : std_logic_vector(3 downto 0) := "0010"; -- precharge all
-  constant SdrCmd_re : std_logic_vector(3 downto 0) := "0001"; -- refresh
-  constant SdrCmd_ms : std_logic_vector(3 downto 0) := "0000"; -- mode regiser set
-
-  constant SdrCmd_xx : std_logic_vector(3 downto 0) := "0111"; -- no operation
-  constant SdrCmd_ac : std_logic_vector(3 downto 0) := "0011"; -- activate
-  constant SdrCmd_rd : std_logic_vector(3 downto 0) := "0101"; -- read
-  constant SdrCmd_wr : std_logic_vector(3 downto 0) := "0100"; -- write
 
 begin
 
@@ -642,23 +622,7 @@ begin
 
   ----------------------------------------------------------------
   -- Reset control
-  -- "RstSeq" should be cleared when power-on reset
   ----------------------------------------------------------------
-  process(memclk)
-    variable cnt : std_logic_vector(1 downto 0);
-  begin
-    if (memclk'event and memclk = '1') then
-      if (cnt = "00") then
-        if (FreeCounter = X"FFFF" and RstSeq /= "11111") then
-          RstSeq <= RstSeq + 1;             -- 3ms (= 65536 / 21.48MHz)
-        end if;
-        FreeCounter <= FreeCounter + 1;
-      end if;
-      -- 00 > 01 > 11 > 10
-      cnt := cnt(0) & (not cnt(1));
-    end if;
-  end process;
-
   -- TN9K: reset comes from the board top (power-on + button), already
   -- synchronised to clk21m. The unused CpuRst_n generator was removed.
   reset     <= not reset_n;
@@ -1212,214 +1176,36 @@ begin
 
 
   ----------------------------------------------------------------
-  -- SD-RAM access
+  -- Memory ports (TN9K: the SD-RAM sequencer is replaced by psram_msx)
   ----------------------------------------------------------------
-  --   SdrSta = "000" => idle
-  --   SdrSta = "001" => precharge all
-  --   SdrSta = "010" => refresh
-  --   SdrSta = "011" => mode register set
-  --   SdrSta = "100" => read cpu
-  --   SdrSta = "101" => write cpu
-  --   SdrSta = "110" => read vdp
-  --   SdrSta = "111" => write vdp
-  ----------------------------------------------------------------
-  process(memclk)
-    type typSdrSeq is (SdrSeq00, SdrSeq01, SdrSeq02, SdrSeq03, SdrSeq04, SdrSeq05, SdrSeq06, SdrSeq07);
-    variable SdrSeq : typSdrSeq := SdrSeq00;
+  -- VRAM: the VDP drives one access per dot (address registered at the end
+  -- of dotState "10", VideoDHClk = VideoDLClk = '1' during "00"); the read
+  -- word comes back one dot later (see src/memory/psram_msx.vhd).
+  pVramSlot <= VideoDHClk and VideoDLClk;
+  pVramAdr  <= VdpAdr;
+  pVramWe_n <= WeVdp_n;
+  pVramDbo  <= VrmDbo;
+  VrmDbi    <= pVramDbi;
+
+  -- CPU memory: same request / acknowledge as the original RamReq / RamAck.
+  -- Address map (CpuAdr, see above): 0x400000-0x6FFFFF, bit 22 is always 1,
+  -- so the die gets CpuAdr(21 downto 0).
+  pRamReq <= RamReq;
+  pRamWr  <= '1' when (SccWrt = '1' and iSltScc = '1') or
+                      (ErmWrt = '1' and iSltErm = '1') or
+                      (MapWrt = '1' and iSltMap = '1') else '0';
+  pRamAdr <= CpuAdr(21 downto 0);
+  pRamDbo <= dbo;
+  RamDbi  <= pRamDbi;
+  RamAck  <= pRamAck and RamReq;
+
+  -- pause key (the original sampled it in the SD-RAM sequencer)
+  process(clk21m)
   begin
-
-    if (memclk'event and memclk = '1') then
-
-      if (SdrSeq = SdrSeq07) then
-        if (RstSeq(4 downto 2) = "000") then
-          SdrSta <= "000";                        -- Idle
-        elsif (RstSeq(4 downto 2) = "001") then
-          case RstSeq(1 downto 0) is
-            when "00"   => SdrSta <= "000";       -- Idle
-            when "01"   => SdrSta <= "001";       -- precharge all
-            when "10"   => SdrSta <= "010";       -- refresh (more than 8 cycles)
-            when others => SdrSta <= "011";       -- mode register set
-          end case;
-        elsif (RstSeq(4 downto 3) /= "11") then
-          SdrSta <= "101";                        -- Write (Initialize memory content)
-        elsif (iSltRfsh_n = '0' and VideoDLClk = '1') then
-          SdrSta <= "010";                        -- refresh
-        elsif (SdPaus = '1' and VideoDLClk = '1') then
-          SdrSta <= "010";                        -- refresh
-        else
-          -- Normal memory access mode
-          SdrSta(2) <= '1';                       -- read/write cpu/vdp
-        end if;
-
-      elsif (SdrSeq = SdrSeq01 and SdrSta(2) = '1' and RstSeq(4 downto 3) = "11") then
-        SdrSta(1) <= VideoDLClk;                  -- 0:cpu, 1:vdp
-        if (VideoDLClk = '0') then
-          if (RamReq = '1' and ((SccWrt = '1' and iSltScc = '1') or
-                                (ErmWrt = '1' and iSltErm = '1') or
-                                (MapWrt = '1' and iSltMap = '1')   )) then
-            SdrSta(0) <= '1';
-          else
-            SdrSta(0) <= '0';
-          end if;
-        else
-          if (WeVdp_n = '0') then
-            SdrSta(0) <= '1';
-          else
-            SdrSta(0) <= '0';
-          end if;
-        end if;
-      end if;
-
-      case SdrSeq is
-        when SdrSeq00 =>
-          if (SdrSta(2) = '1') then               -- CPU/VDP read/write
-            SdrCmd <= SdrCmd_ac;
-          elsif (SdrSta(1 downto 0) = "00") then  -- idle
-            SdrCmd <= SdrCmd_xx;
-          elsif (SdrSta(1 downto 0) = "01") then  -- precharge all
-            SdrCmd <= SdrCmd_pr;
-          elsif (SdrSta(1 downto 0) = "10") then  -- refresh
-            SdrCmd <= SdrCmd_re;
-          else                                    -- mode register set
-            SdrCmd <= SdrCmd_ms;
-          end if;
-          SdrBa1 <= '0';
-          SdrBa0 <= '0';
-          SdrUdq <= '1';
-          SdrLdq <= '1';
-          if (SdrSta(2) = '0') then
-            --        single          CL=2 WT=0(seq) BL=1
-            SdrAdr <= "00010" & "0" & "010" & "0" & "000";
-          else
-            if (RstSeq(4 downto 3) /= "11") then
-              SdrAdr <= ClrAdr(12 downto 0);      -- clear memory (VRAM, MainRAM)
-            elsif (VideoDLClk = '0') then
-              SdrAdr <= CpuAdr(13 downto 1);      -- cpu read/write
-            else
-              SdrAdr <= VdpAdr(12 downto 0);      -- vdp read/write
-            end if;
-          end if;
-        when SdrSeq01 =>
-          SdrCmd <= SdrCmd_xx;
-        when SdrSeq02 =>
-          if (SdrSta(2) = '1') then
-            if (SdrSta(0) = '0') then
-              SdrCmd <= SdrCmd_rd;                -- "100"(cpu read) / "110"(vdp read)
-              SdrUdq <= '0';
-              SdrLdq <= '0';
-              SdrDat <= (others => 'Z');
-            else
-              SdrCmd <= SdrCmd_wr;                -- "101"(cpu write) / "111"(vdp write)
-              if (RstSeq(4 downto 3) /= "11") then
-                SdrDat <= (others => '0');
-                SdrUdq <= '0';
-                SdrLdq <= '0';
-              elsif (VideoDLClk = '0') then
-                SdrDat <= dbo & dbo;              -- "101"(cpu write)
-                SdrUdq <= not CpuAdr(0);
-                SdrLdq <= CpuAdr(0);
-              else
-                SdrDat <= VrmDbo & VrmDbo;        -- "111"(vdp write)
-                SdrUdq <= not VdpAdr(16);
-                SdrLdq <= VdpAdr(16);
-              end if;
-            end if;
-          end if;
-          SdrAdr(12 downto 9) <= "0010";          -- A10=1 => enable auto precharge
-          if (RstSeq(4 downto 2) = "010") then
-            SdrAdr(8 downto 0) <= "11" & "1000" & ClrAdr(15 downto 13);  -- clear VRAM(128KB)
-          elsif (RstSeq(4 downto 2) = "011") then
-            SdrAdr(8 downto 0) <= "11" & "0000" & ClrAdr(15 downto 13);  -- clear ERAM(128KB)
-          elsif (RstSeq(4 downto 3) = "10") then
-            SdrAdr(8 downto 0) <= "01" & "0000" & ClrAdr(15 downto 13);  -- clear MainRAM(128KB)
-          elsif (VideoDLClk = '0') then
-            SdrAdr(8 downto 0) <= CpuAdr(22 downto 14);
-          else
-            SdrAdr(8 downto 0) <= "11" & "1000" & VdpAdr(15 downto 13);
-          end if;
-          if (RstSeq(4 downto 3) /= "11") then
-            ClrAdr <= (others => '0');
-          else
-            ClrAdr <= ClrAdr + 1;
-          end if;
-        when SdrSeq03 =>
-          SdrCmd <= SdrCmd_xx;
-          SdrUdq <= '1';
-          SdrLdq <= '1';
-          SdrDat <= (others => 'Z');
-        when SdrSeq04 =>
-        when SdrSeq05 =>
-          if (SdrSta(2) = '1') then
-            if (SdrSta(0) = '0') then
-              if (VideoDLClk = '0') then
-                if (CpuAdr(0) = '0') then
-                  RamDbi <= pMemDat(7 downto 0);  -- "100"(cpu read)
-                else
-                  RamDbi <= pMemDat(15 downto 8); -- "100"(cpu read)
-                end if;
-                SdPaus <= Paus;
-              else
-                  VrmDbi <= pMemDat(15 downto 0); -- "110"(vdp read)
-              end if;
-            end if;
-          else
-            SdPaus <= Paus;
-          end if;
-        when SdrSeq06 =>
-        when others   => null;
-      end case;
-
-      case SdrSeq is
-        when SdrSeq00 =>
-          if (VideoDHClk = '1' or RstSeq(4 downto 3) /= "11") then
-            SdrSeq := SdrSeq01;
-          end if;
-        when SdrSeq01 => SdrSeq := SdrSeq02;
-        when SdrSeq02 => SdrSeq := SdrSeq03;
-        when SdrSeq03 => SdrSeq := SdrSeq04;
-        when SdrSeq04 => SdrSeq := SdrSeq05;
-        when SdrSeq05 =>
-            SdrSeq := SdrSeq06;
-        when SdrSeq06 =>
-            SdrSeq := SdrSeq07;
-        when others   =>
-          if (VideoDHClk = '0' or RstSeq(4 downto 3) /= "11") then
-            SdrSeq := SdrSeq00;
-          end if;
-      end case;
-
-    end if;
-
-  end process;
-
-  process (clk21m, reset)
-  begin
-    if (reset = '1') then
-      RamAck <= '0';
-    elsif (clk21m'event and clk21m = '1') then
-      if (RamReq = '0') then
-        RamAck <= '0';
-      elsif (VideoDLClk = '0' and VideoDHClk = '1') then
-        RamAck <= '1';
-      end if;
+    if (clk21m'event and clk21m = '1') then
+      SdPaus <= Paus;
     end if;
   end process;
-
-  pMemCke   <= '1';
-  pMemCs_n  <= SdrCmd(3);
-  pMemRas_n <= SdrCmd(2);
-  pMemCas_n <= SdrCmd(1);
-  pMemWe_n  <= SdrCmd(0);
-
-  pMemUdq   <= SdrUdq;
-  pMemLdq   <= SdrLdq;
-  pMemBa1   <= SdrBa1;
-  pMemBa0   <= SdrBa0;
-
-  pMemAdr   <= SdrAdr;
-  pMemDat   <= SdrDat;
-
-
 
 
   ----------------------------------------------------------------
