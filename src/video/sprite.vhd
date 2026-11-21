@@ -279,6 +279,7 @@ architecture rtl of sprite is
   signal spYTestEnd          : std_logic;
   -- JP: 下書きデータ準備中のローカルプレーン番号
   signal spPrepareLocalPlaneNum   : std_logic_vector( 2 downto 0);
+  signal spPrepareNext : std_logic;     -- TN9K: plane done, advance at the next "000"
   -- JP: 下書きデータ準備中のプレーン番号
   signal spPreparePlaneNum   : std_logic_vector( 4 downto 0);
   -- JP: 下書きデータ準備中のスプライトのYライン番号(スプライトのどの部分を描画するか)
@@ -406,6 +407,7 @@ begin
       iRamAdrYTest   <= (others => '0');
       spYTestPlaneNum <= (others => '0');
       spPrepareLocalPlaneNum <= (others => '0');
+      spPrepareNext <= '0';
       spPrepareEnd <= '0';
       spVramAccessing <= '0';
       for i in 0 to SpMode2_nSprites -1 loop
@@ -486,7 +488,9 @@ begin
             spYTestListUpCounter  <= (others => '0');
             spYTestEnd <= '0';
             spOffLatched <= vdpR8SpOff;
-          elsif( (eightDotState = "110") and (spYTestEnd = '0') ) then  
+          -- TN9K: the Y read issued at eightDotState 5 is captured at 7
+          -- (was 6): VRAM read data arrives one dot later (PSRAM latency).
+          elsif( (eightDotState = "111") and (spYTestEnd = '0') ) then
             -- JP: Y座標のアドレスはdotStae="10"の時に出ている。
             spYTestPlaneNum <= spYTestPlaneNum + 1;
             if( spYTestPlaneNum = 31 ) then
@@ -539,12 +543,18 @@ begin
             --  +1 : |       X       |
             --  +2 : | Pattern Num   |
             --  +3 : |EC0 0 0| Color | (mode 1)
+            -- TN9K: VRAM read data is captured two dots after the address
+            -- (PSRAM latency), so the pattern number is read before X to
+            -- leave two dots between it and the pattern reads:
+            --   address ("11") : Y @0, PN @1, X @2, PT @3/@4, C @5
+            --   capture ("01") : Y @2, PN @3, X @4, PT @5/@6, C @7
+            --   next plane     : @0 of the following 8 dots
             when "000" =>               -- Y read
               iRamAdrPrepare <= readVramAddrYread;
-            when "001" =>               -- X read
-              iRamAdrPrepare <= readVramAddrXread;
-            when "010" =>               -- Pattern Num read
+            when "001" =>               -- Pattern Num read
               iRamAdrPrepare <= readVramAddrPNread;
+            when "010" =>               -- X read
+              iRamAdrPrepare <= readVramAddrXread;
             when "011" | "100" =>       -- Pattern read
               iRamAdrPrepare <= readVramAddrPTread;
             when "101" =>               -- Color read
@@ -557,8 +567,18 @@ begin
           null;
         when "01" =>
           if( spState = spstate_prepare ) then
+            -- TN9K: captures two dots after the address (see the schedule above)
             case eightDotState is
-              when "001" =>               -- Y read
+              when "000" =>               -- next plane (was at "111")
+                if( spPrepareNext = '1' ) then
+                  spPrepareNext <= '0';
+                  spPrepareLocalPlaneNum <= spPrepareLocalPlaneNum + 1;
+                  if( spPrepareLocalPlaneNum = 7 ) then
+                    spPrepareEnd <= '1';
+                  end if;
+                  spPreparePlaneNum <= spRenderPlanes(conv_integer(spPrepareLocalPlaneNum+1));
+                end if;
+              when "010" =>               -- Y read
                 -- JP: スプライトの何行目が該当したか覚えておく
                 spListUpY := dotCounterYLatched(7 downto 0) - pRamDat;
                 if( VdpR1SpZoom = '0' ) then
@@ -566,13 +586,13 @@ begin
                 else
                   spPrepareLineNum  <= spListUpY(4 downto 1);
                 end if;
-              when "010" =>               -- X read
-                spInfoRamX_in <= '0' & pRamDat;
               when "011" =>               -- Pattern Num read
                 spPreparePatternNum <= pRamDat;
-              when "100" =>               -- Pattern read left
+              when "100" =>               -- X read
+                spInfoRamX_in <= '0' & pRamDat;
+              when "101" =>               -- Pattern read left
                 spInfoRamPattern_in(15 downto 8) <= pRamDat;
-              when "101" =>               -- Pattern read right
+              when "110" =>               -- Pattern read right
                 if( VdpR1SpSize = '0' ) then
                   -- 8x8 mode
                   spInfoRamPattern_in( 7 downto 0) <= (others => '0');
@@ -580,7 +600,7 @@ begin
                   -- 16x16 mode
                   spInfoRamPattern_in( 7 downto 0) <= pRamDat;
                 end if;
-              when "110" =>               -- Color read
+              when "111" =>               -- Color read
                 -- color
                 spInfoRamColor_in <= pRamDat(3 downto 0);
                 -- CC
@@ -596,7 +616,7 @@ begin
                   -- EC = '1';
                   spInfoRamX_in <= spInfoRamX_in - 32;
                 end if;
-                
+
                 -- If all of the sprites list-uped are readed,
                 -- the sprites left should not be drawn.
                 if( (spPrepareLocalPlaneNum >= spYTestListUpCounter) or
@@ -606,12 +626,7 @@ begin
 
                 -- Write sprite informations to spInfoRam.
                 spInfoRamWe <= '1';
-              when "111" =>
-                spPrepareLocalPlaneNum <= spPrepareLocalPlaneNum + 1;
-                if( spPrepareLocalPlaneNum = 7 ) then
-                  spPrepareEnd <= '1';
-                end if;
-                spPreparePlaneNum <= spRenderPlanes(conv_integer(spPrepareLocalPlaneNum+1));
+                spPrepareNext <= '1';
 
               when others => null;
             end case;
@@ -619,6 +634,7 @@ begin
             spPreparePlaneNum <= spRenderPlanes(0);
             spPrepareLocalPlaneNum <= (others => '0');
             spPrepareEnd <= '0';
+            spPrepareNext <= '0';
             spInfoRamWe <= '0';
           end if;
         when others => null;

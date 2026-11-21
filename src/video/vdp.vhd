@@ -374,6 +374,7 @@ architecture rtl of vdp is
   signal VdpVramWrAck : std_logic;
   signal VdpVramReadingR : std_logic;
   signal VdpVramReadingA : std_logic;
+  signal VdpVramRdPend : std_logic;      -- TN9K: read issued, data arrives next dot
   signal VdpVramRdData : std_logic_vector(7 downto 0);
   signal VdpVramRdReq : std_logic;
   signal VdpVramRdAck : std_logic;
@@ -536,6 +537,7 @@ architecture rtl of vdp is
   signal VdpCmdVramAccessAddr : std_logic_vector( 16 downto 0);
   signal VdpCmdVramReadingR : std_logic;
   signal VdpCmdVramReadingA : std_logic;
+  signal VdpCmdVramRdPend : std_logic;   -- TN9K: read issued, data arrives next dot
   signal VdpCmdVramRdData : std_logic_vector(7 downto 0);
   signal VdpCmdVramWrData : std_logic_vector(7 downto 0);
 
@@ -574,6 +576,7 @@ architecture rtl of vdp is
   signal iRamAdr : std_logic_vector(16 downto 0);
   signal pRamDat : std_logic_vector( 7 downto 0);
   signal xRamSel : std_logic;
+  signal xRamSelA : std_logic;
   signal pRamDatPair : std_logic_vector( 7 downto 0);
 
   
@@ -585,7 +588,21 @@ architecture rtl of vdp is
 begin
 
   pRamAdr <= iRamAdr;
-  xRamSel <= iRamAdr(16);
+  -- TN9K: read data is captured one dot after the access, so the byte lane
+  -- select must follow the access, not the current address: iRamAdr(16) is
+  -- sampled at the access ("00") and used one dot later.
+  process( clk21m, reset )
+  begin
+    if( reset = '1' ) then
+      xRamSelA <= '0';
+      xRamSel  <= '0';
+    elsif( clk21m'event and clk21m = '1' ) then
+      if( dotState = "00" ) then
+        xRamSelA <= iRamAdr(16);
+        xRamSel  <= xRamSelA;
+      end if;
+    end if;
+  end process;
   pRamDat <= pRamDbi(7 downto 0) when xRamSel = '0' else pRamDbi(15 downto 8);
   pRamDatPair <= pRamDbi(7 downto 0) when xRamSel = '1' else pRamDbi(15 downto 8);
 
@@ -1032,6 +1049,7 @@ begin
 
       VdpVramReadingR <= '0';
       VdpVramReadingA <= '0';
+      VdpVramRdPend <= '0';
 
       VdpVramRdAck <= '0';
       VdpVramWrAck <= '0';
@@ -1043,6 +1061,7 @@ begin
       VdpCmdVramRdAck <= '0';
       VdpCmdVramReadingR <= '0';
       VdpCmdVramReadingA <= '0';
+      VdpCmdVramRdPend <= '0';
       VdpCmdVramRdData <= (others => '0');
     elsif (clk21m'event and clk21m = '1') then
       if( h_counter = CLOCKS_PER_LINE-1) then
@@ -1074,16 +1093,25 @@ begin
       ------------------------------------------
       -- main state
       ------------------------------------------
+      -- TN9K: VRAM read data arrives one dot later than in the original
+      -- (PSRAM latency), so CPU / command reads are captured at the "01"
+      -- of the dot AFTER the access instead of the very next "01".
       case dotState is
         when "01" =>
-          if( VdpVramReadingR /= VdpVramReadingA ) then
+          if( VdpVramRdPend = '1' ) then
             VdpVramRdData <= pRamDat;
             VdpVramReadingA <= not VdpVramReadingA;
+            VdpVramRdPend <= '0';
+          elsif( VdpVramReadingR /= VdpVramReadingA ) then
+            VdpVramRdPend <= '1';
           end if;
-          if( VdpCmdVramReadingR /= VdpCmdVramReadingA ) then
+          if( VdpCmdVramRdPend = '1' ) then
             VdpCmdVramRdData <= pRamDat;
             VdpCmdVramRdAck <= not VdpCmdVramRdAck;
             VdpCmdVramReadingA <= not VdpCmdVramReadingA;
+            VdpCmdVramRdPend <= '0';
+          elsif( VdpCmdVramReadingR /= VdpCmdVramReadingA ) then
+            VdpCmdVramRdPend <= '1';
           end if;
         when "11" =>
         when others => null;

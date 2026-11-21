@@ -7,7 +7,7 @@
 #           e.g. "src" (working tree) or a golden snapshot made with
 #           sim/make_golden.sh
 #   outdir  build directory (one per srcdir), dumps go to <outdir>/dump/
-#   screen  0 1 2 3 4 5 6 7 8 80   (see tb_vdp.vhd)
+#   screen  0 1 2 3 4 5 6 7 8 80   (see tb_vdp.vhd), or "build" to only compile
 #   lat     VRAM read latency model in clk21m edges (0 = original SD-RAM timing)
 #
 # Needs GHDL; on this machine: C:\msys64\ucrt64\bin (gcc must be on PATH too).
@@ -35,6 +35,7 @@ if [ ! -f "$STAMP" ] || [ -n "$newest" ]; then
   ghdl -e $GHDLFLAGS tb_vdp
   touch "$STAMP"
 fi
+[ "$SCREEN" = build ] && exit 0
 
 NAME="s${SCREEN}_l${LAT}_c${CMD}"
 ghdl -r $GHDLFLAGS tb_vdp -gSCREEN=$SCREEN -gLAT=$LAT -gCMDTEST=$CMD -gFRAMES=$FRAMES \

@@ -6,8 +6,9 @@
 --   LAT      : 0 = "ideal" VRAM (timing of the original SD-RAM sequencer:
 --                  read data valid from the end of dotState "00")
 --              N = read data valid N clk21m edges later; until then the bus
---                  carries the inverted word (garbage), so an early sample
---                  shows up as a wrong pixel.
+--                  keeps the previous word, so an early sample shows up as a
+--                  wrong pixel. 4 = data valid from the start of dotState "01"
+--                  of the NEXT dot (the budget of the retimed VDP).
 --   DUMPFILE : per-clock dump of the VGA output of frame FRAMES
 --              (one line per clk21m: RRGGBB in hex, then HS VS)
 --   CMDTEST  : run a VDP command (LMMV + HMMM) and a CPU VRAM write/read test
@@ -199,7 +200,9 @@ begin
           if LAT = 0 then
             RamDbi <= mem(a);
           else
-            RamDbi <= not mem(a);          -- garbage until the data "arrives"
+            -- the bus keeps the previous word until this one "arrives"
+            -- (a real controller holds its output register), so an early
+            -- sample reads the previous access' data
             pend := mem(a);
             cnt := LAT;
           end if;

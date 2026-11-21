@@ -180,16 +180,21 @@ begin
       pRamAdr <= (others => '0');
     elsif (clk21m'event and clk21m = '1') then
 
+      -- TN9K: VRAM read data is captured two dots after the address
+      -- (one dot later than the original, for the PSRAM latency), so the
+      -- generator / color reads, which depend on the name, move to slots 2/3.
+      --   address ("11")  : name @0, generator @2, color @3
+      --   capture ("01")  : name @2, generator @4, color @5
       case dotState is
         when "11" =>
           case eightDotState is
             when "000" =>
               -- read pattern name table
               pRamAdr <= logicalVramAddrNam;
-            when "001" =>
+            when "010" =>
               -- read pattern Generator table
               pRamAdr <= logicalVramAddrGen;
-            when "010" =>
+            when "011" =>
               -- read color table
               -- (or pattern of multi color)
               pRamAdr <= logicalVramAddrCol;
@@ -202,13 +207,13 @@ begin
           null;
         when "01" =>
           case eightDotState is
-            when "001" =>
+            when "010" =>
               -- read pattern name table
               patternNum <= pRamDat;
-            when "010" =>
+            when "100" =>
               -- read pattern Generator table
               prePattern <= pRamDat;
-            when "011" =>
+            when "101" =>
               -- read color table
               -- (color of multi color)
               preColor <= pRamDat;

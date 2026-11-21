@@ -201,12 +201,16 @@ begin
       -- timing generation
       case dotState is
         when "10" =>
-          if( dotCounterX = 12 ) then
+          -- TN9K: the fetch window opens one dot earlier (dotCounterX 11 instead
+          -- of 12) with dotCounter24 = "11101", so that the first name read is
+          -- issued one dot before the original cycle 0 (see the schedule below);
+          -- dotCounter24 then wraps to 0 exactly where the original reset it.
+          if( dotCounterX = 11 ) then
             -- JP: dotcounterは"10"のタイミングでは既にカウントアップしているので注意
             txPreWindowX <= '1';
-            dotCounter24 <= (others => '0');
+            dotCounter24 <= "11101";
           else
-            if( dotCounterX = 240+12 ) then
+            if( dotCounterX = 240+11 ) then
               txPreWindowX <= '0';
             end if;
             -- The dotCounter24(2 downto 0) counts up 0 to 5,
@@ -232,6 +236,14 @@ begin
       end case;
       
       
+      -- TN9K: VRAM read data is captured two dots after the address (one dot
+      -- later than the original, for the PSRAM latency). Each generator read
+      -- must therefore be issued at least two dots after its name read:
+      --   address ("11")  : name A @5 (previous cycle), gen A @1, name B @2,
+      --                     gen B @4, blink colour @0 (once per 4 cycles)
+      --   capture ("01")  : name A @1, gen A @3, name B @4, gen B @0 (next),
+      --                     blink colour @2
+      -- The pattern loads ("00" @4 for A, @1 for B) are unchanged.
       case dotState is
         when "11" =>
           if( txPreWindowX = '1' ) then
@@ -244,25 +256,25 @@ begin
                   pRamAdr <= logicalVramAddrCol;
                   iTxVramReadEn2 <= '1';
                 end if;
-              when "001" =>
-                -- read pattern name table
+              when "101" =>
+                -- read pattern name table (character A)
                 pRamAdr <= logicalVramAddrNam;
                 iTxVramReadEn <= '1';
                 txCharCounterX <= txCharCounterX + 1;
-              when "010" =>
-                -- read pattern generator table
+              when "001" =>
+                -- read pattern generator table (character A)
                 pRamAdr <= logicalVramAddrGen;
                 iTxVramReadEn <= '1';
-              when "100" =>
-                -- read pattern name table
+              when "010" =>
+                -- read pattern name table (character B)
                 -- It is used if vdpmode is TEST2.
                 pRamAdr <= logicalVramAddrNam;
                 iTxVramReadEn2 <= '1';
                 if( vdpModeText2 = '1' ) then
                   txCharCounterX <= txCharCounterX + 1;
                 end if;
-              when "101" =>
-                -- read pattern generator table
+              when "100" =>
+                -- read pattern generator table (character B)
                 -- It is used if vdpmode is TEST2.
                 pRamAdr <= logicalVramAddrGen;
                 iTxVramReadEn2 <= '1';
@@ -284,24 +296,26 @@ begin
           end if;
         when "01" =>
           case dotCounter24(2 downto 0) is
-            when "001" =>
+            when "010" =>
               -- read color table(TEXT2 BLINK)
               -- It is used only one time per 8 characters.
               if( dotCounter24(4 downto 3) = "00" ) then
                 preBlink <= pRamDat;
               end if;
-            when "010" =>
-              -- read pattern name table
+            when "001" =>
+              -- read pattern name table (character A)
               patternNum <= pRamDat;
             when "011" =>
-              -- read pattern generator table
+              -- read pattern generator table (character A)
               prePattern <= pRamDat;
-            when "101" =>
-              -- read pattern name table
+            when "100" =>
+              -- read pattern name table (character B)
               -- It is used if vdpmode is TEST2.
-              patternNum <= pRamDat;
+              if( vdpModeText2 = '1' ) then
+                patternNum <= pRamDat;
+              end if;
             when "000" =>
-              -- read pattern generator table
+              -- read pattern generator table (character B)
               -- It is used if vdpmode is TEST2.
               if( vdpModeText2 = '1' ) then
                 prePattern <= pRamDat;

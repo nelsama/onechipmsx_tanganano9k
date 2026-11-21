@@ -217,13 +217,23 @@ begin
             if( dotCounterX = 0 ) then
               fifoAddr_in <= (others => '0');
             end if;
-          elsif( (eightDotState = "001") or
-                 (eightDotState = "010") or
-                 (eightDotState = "011") or
-                 (eightDotState = "100") ) then
-            fifoIn <= '1';
-            -- 倍速で読み出すので、2ずつ増える
-            localDotCounterX <= localDotCounterX + 2;
+          else
+            -- TN9K: read data arrives one dot later (PSRAM latency): the
+            -- FIFO takes the data of the reads issued at eightDotState 0-3
+            -- at states 2-5 (was 1-4). Addresses are unchanged.
+            if( (eightDotState = "010") or
+                (eightDotState = "011") or
+                (eightDotState = "100") or
+                (eightDotState = "101") ) then
+              fifoIn <= '1';
+            end if;
+            if( (eightDotState = "001") or
+                (eightDotState = "010") or
+                (eightDotState = "011") or
+                (eightDotState = "100") ) then
+              -- 倍速で読み出すので、2ずつ増える
+              localDotCounterX <= localDotCounterX + 2;
+            end if;
           end if;
         when "01" =>
           -- 前のステートでfifoIn = '1'を出力したら、ここ(この次のクロックエッジ)で
@@ -234,10 +244,10 @@ begin
           end if;
         when "11" =>
           if( ((vdpModeGraphic6 = '1') or (vdpModeGraphic7 = '1')) and
-              ((eightDotState = "001") or
-               (eightDotState = "010") or
+              ((eightDotState = "010") or            -- TN9K: was 1-4
                (eightDotState = "011") or
-               (eightDotState = "100")) ) then
+               (eightDotState = "100") or
+               (eightDotState = "101")) ) then
             -- GRAPHIC6,7の時はペアデータも使う
             fifoIn <= '1';
           end if;
