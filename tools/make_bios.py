@@ -13,7 +13,8 @@ flash at 0x000000 (TN9K; the original IPL used 0x040000). The core maps the imag
     0x10000  32 KB  MSX2/2+ main BIOS (slot 0-0)
     0x18000  16 KB  SUB-ROM (slot 3-1)
     0x1C000  16 KB  FM-BIOS / MSX-MUSIC (slot 0-2)
-    0x20000 128 KB  kanji font, JIS level 1
+    0x20000 128 KB  kanji font, JIS level 1 (optional; the TN9K core has no
+                    kanji ROM hardware by default)
 
 Without --kbasic the SUB-ROM is patched so that it does not call the Kanji
 BASIC at boot: the 11-byte routine at SUB-ROM 2CB9h (LD IY,slot / LD IX,7A00h
@@ -55,7 +56,8 @@ def main():
     ap.add_argument("--main", required=True, help="main BIOS, 32 KB (starts F3 C3)")
     ap.add_argument("--sub", required=True, help="SUB-ROM, 16 KB (starts 'CD')")
     ap.add_argument("--fm", required=True, help="FM-BIOS, 16 KB (starts 'AB')")
-    ap.add_argument("--kanji", required=True, help="kanji font, >= 128 KB (first 128 KB used)")
+    ap.add_argument("--kanji", help="kanji font, >= 128 KB (first 128 KB used); TN9K: not used "
+                                    "(the core is built with ENABLE_KANJI = false), the area is left empty")
     ap.add_argument("--disk", help="MegaSD driver ROM, <= 64 KB (<= 32 KB with --kbasic) (starts 'AB')")
     ap.add_argument("--kbasic", help="Kanji BASIC, 32 KB (starts 'AB'), needed by MSX2+ BIOSes")
     ap.add_argument("-o", "--out", required=True)
@@ -89,7 +91,7 @@ def main():
            + load(a.main, 0x8000, "main", b"\xf3\xc3")
            + sub
            + load(a.fm, 0x4000, "fm", b"AB")
-           + load(a.kanji, 0x20000, "kanji", allow_bigger=True))
+           + (load(a.kanji, 0x20000, "kanji", allow_bigger=True) if a.kanji else bytes([0xff]) * 0x20000))
     assert len(img) == 0x40000
 
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
