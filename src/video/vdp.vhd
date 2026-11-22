@@ -663,8 +663,11 @@ begin
                 '0' when (hsyncIntReq /= hsyncIntAck)
                 else '1';
 
+  -- TN9K: '1' when inactive. The original was open drain ('Z') with a
+  -- pull-up on the board; inside the FPGA there is none and 'Z' became a
+  -- constant: the Z80 saw a permanent interrupt.
   int_n <= '0' when (vsyncInt_n = '0') or (hsyncInt_n = '0')
-           else 'Z';
+           else '1';
 
   -----------------------------------------------------------------------------
   -- VDP Mode Decoder

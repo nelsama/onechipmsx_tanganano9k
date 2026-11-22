@@ -20,7 +20,7 @@
 --     - an access must start every 4 clk21m = 4*RATIO clk cycles;
 --     - its data must be in vdp_dbi before E0 + 6*RATIO clk cycles.
 --   The access is started on the first clk edge that sees vdp_slot = '1'
---   (E0 + 1) and is accepted by the channel at E0 + 2. With the fixed (2x)
+--   (E0 + 1), registered, and accepted by the channel at E0 + 3. With the fixed (2x)
 --   latency a read takes 8 + 2*LATENCY cycles (+1 back in IDLE), e.g.
 --     RATIO 4, LATENCY 3 : 15 of 16 cycles per dot, data at E0+16 (< E0+24)
 --     RATIO 5, LATENCY 5 : 19 of 20 cycles per dot, data at E0+20 (< E0+30)
@@ -92,6 +92,10 @@ architecture rtl of psram_msx is
   signal dout0, dout1   : std_logic_vector(15 downto 0);
 
   signal slot_d         : std_logic := '0';
+  signal start0         : std_logic := '0';
+  signal vdp_adr_r      : std_logic_vector(16 downto 0) := (others => '0');
+  signal vdp_dbo_r      : std_logic_vector(7 downto 0) := (others => '0');
+  signal vdp_we_r       : std_logic := '1';
   signal ph             : integer range 0 to 8 * RATIO := 0;
   signal dbi0           : std_logic_vector(15 downto 0) := (others => '0');
   signal overrun        : std_logic := '0';
@@ -100,6 +104,9 @@ architecture rtl of psram_msx is
   type cpu_st_t is (C_IDLE, C_ISSUE, C_BUSY, C_DONE);
   signal cpu_st         : cpu_st_t := C_IDLE;
   signal cpu_rd         : std_logic := '0';
+  signal cpu_req_r, cpu_wr_r : std_logic := '0';
+  signal cpu_adr_r      : std_logic_vector(21 downto 0) := (others => '0');
+  signal cpu_dbo_r      : std_logic_vector(7 downto 0) := (others => '0');
   signal ack_i          : std_logic := '0';
   signal dbi_i          : std_logic_vector(7 downto 0) := (others => '1');
 
@@ -134,13 +141,24 @@ begin
       if vdp_slot = '1' and slot_d = '0' then
         ph <= 1;
       end if;
+      -- two stages (timing: the decision fans out to the address / data
+      -- registers): the VDP inputs and the start are registered first, the
+      -- access is issued one clk later (accepted at E0 + 3, done at E0 + 17,
+      -- delivered at E0 + 20 for RATIO 4)
+      vdp_adr_r <= vdp_adr;
+      vdp_dbo_r <= vdp_dbo;
+      vdp_we_r  <= vdp_we_n;
+      start0 <= '0';
       if vdp_slot = '1' and slot_d = '0' and ready_i = '1' then
+        start0 <= '1';
+      end if;
+      if start0 = '1' then
         if busy0 = '1' then
           overrun <= '1';
         end if;
-        adr0 <= "00000" & vdp_adr(15 downto 0) & vdp_adr(16);
-        din0 <= vdp_dbo & vdp_dbo;
-        if vdp_we_n = '0' then
+        adr0 <= "00000" & vdp_adr_r(15 downto 0) & vdp_adr_r(16);
+        din0 <= vdp_dbo_r & vdp_dbo_r;
+        if vdp_we_r = '0' then
           wr0 <= '1';
         else
           rd0 <= '1';
@@ -175,13 +193,18 @@ begin
     if rising_edge(clk) then
       rd1 <= '0';
       wr1 <= '0';
+      -- the clk21m inputs are registered first (timing)
+      cpu_req_r <= cpu_req;
+      cpu_wr_r  <= cpu_wr;
+      cpu_adr_r <= cpu_adr;
+      cpu_dbo_r <= cpu_dbo;
       case cpu_st is
         when C_IDLE =>
-          if cpu_req = '1' and ack_i = '0' and ready_i = '1' and busy1 = '0' then
-            adr1 <= cpu_adr;
-            din1 <= cpu_dbo & cpu_dbo;
-            cpu_rd <= not cpu_wr;
-            if cpu_wr = '1' then
+          if cpu_req_r = '1' and ack_i = '0' and ready_i = '1' and busy1 = '0' then
+            adr1 <= cpu_adr_r;
+            din1 <= cpu_dbo_r & cpu_dbo_r;
+            cpu_rd <= not cpu_wr_r;
+            if cpu_wr_r = '1' then
               wr1 <= '1';
             else
               rd1 <= '1';

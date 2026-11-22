@@ -30,6 +30,11 @@
 -- ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 --
 
+-- TN9K: the BIOS is read from the SPI flash at 0x000000 instead of 0x040000
+-- (the EPCS of the original kept the FPGA configuration below 256 KB; the
+-- Tang Nano 9K flash only holds data): byte F088h, "LD DE,0200h" -> "LD
+-- DE,0000h" (start sector of the flash load).
+--
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.std_logic_unsigned.all;
@@ -62,7 +67,7 @@ constant ipl_data : rom_type := (
         X"1C", X"CD", X"A8", X"F1", X"38", X"05", X"CD", X"A0", 
         X"F0", X"18", X"12", X"21", X"BD", X"F0", X"22", X"04", 
         X"F0", X"3E", X"60", X"32", X"00", X"60", X"11", X"00", 
-        X"02", X"4B", X"CD", X"A0", X"F0", X"AF", X"32", X"00", 
+        X"00", X"4B", X"CD", X"A0", X"F0", X"AF", X"32", X"00", 
         X"60", X"3C", X"32", X"00", X"68", X"32", X"00", X"70", 
         X"32", X"00", X"78", X"3E", X"C0", X"D3", X"A8", X"C7", 
         X"06", X"10", X"3E", X"80", X"32", X"00", X"70", X"3C", 

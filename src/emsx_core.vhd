@@ -107,7 +107,11 @@ entity emsx_core is
 
     -- TN9K debug: address of the last opcode fetch (M1) & primary slot
     -- register (port A8h) & count of CPU writes to the VDP ports 98-9Bh
-    pDbg        : out std_logic_vector(31 downto 0)
+    pDbg        : out std_logic_vector(31 downto 0);
+    -- TN9K simulation probe of the internal CPU bus (unconnected on the board):
+    -- adr(15:0) & dbo(7:0) & mem & wrt & req & PriSltNum(1:0) & ExpSltNum0(1:0)
+    -- & ExpSltNum3(1:0)
+    pDbgBus     : out std_logic_vector(32 downto 0)
   );
 end emsx_core;
 
@@ -448,6 +452,7 @@ architecture rtl of emsx_core is
   signal rom_main    : std_logic;
   signal rom_opll    : std_logic;
   signal rom_extr    : std_logic;
+  signal rom_kbas    : std_logic;
   signal rom_kanj    : std_logic;
 
   -- IPL-ROM signals
@@ -596,7 +601,7 @@ begin
   ----------------------------------------------------------------
   process(clk21m)
 
-    variable jc : std_logic_vector(4 downto 0);
+    variable jc : std_logic_vector(4 downto 0) := (others => '0');  -- (initial value for simulation)
 
   begin
 
@@ -717,6 +722,11 @@ begin
       elsif (ErmReq = '1' and adr(15 downto 13) = "010" and MmcAct = '1') then
         BusWait_n <= '0';
       elsif (SdPaus = '1') then
+        BusWait_n <= '0';
+      elsif (RamReq = '1' and RamAck = '0') then
+        -- TN9K: the PSRAM answers in ~250-350 ns, close to the ~417 ns a
+        -- Z80 memory read allows: wait until the data is there (the
+        -- original SD-RAM slots were fast enough to need no wait)
         BusWait_n <= '0';
       else
         BusWait_n <= '1';
@@ -845,7 +855,7 @@ begin
         else                            -- disable SD/MMC drive
           jSltMem <= '0';
         end if;
-      elsif (mem = '1' and (iSltMap = '1' or rom_main = '1' or rom_opll = '1' or rom_extr = '1')) then
+      elsif (mem = '1' and (iSltMap = '1' or rom_main = '1' or rom_opll = '1' or rom_extr = '1' or rom_kbas = '1')) then
           jSltMem <= '1';
 --    elsif (mem = '0' and (rom_kanj = '1')) then
 --        jSltMem <= '1';
@@ -1021,6 +1031,11 @@ begin
   rom_extr <= '0' when adr(15 downto 14) /= "00"                           else      -- SUB-ROM
               mem when PriSltNum  = "11" and
                        ExpSltNum3 = "01" and SelfMode = '1'                else '0';
+  -- TN9K: Kanji BASIC (32 KB) in slot 3-1, pages 1-2, like every Japanese
+  -- MSX2+ (the MSX2+ SUB-ROM calls into it at boot, 7A00h of its own slot)
+  rom_kbas <= '0' when adr(15 downto 14) /= "01" and adr(15 downto 14) /= "10" else
+              mem when PriSltNum  = "11" and
+                       ExpSltNum3 = "01" and SelfMode = '1'                else '0';
   rom_kanj <= '0' when mem = '1'                                           else      -- Kanji-ROM
               '1' when adr(7 downto 2) = "110110" and SelfMode = '1'       else '0';
 
@@ -1035,7 +1050,7 @@ begin
   PpiReq <= req when mem = '0' and adr(7 downto 2) = "101010" else '0'; -- I/O:A8-ABh / PPI(8255)
   OpllReq<= req when mem = '0' and adr(7 downto 2) = "011111" else '0'; -- I/O:7C-7Fh / OPLL(YM2413)
   KanReq <= req when mem = '0' and adr(7 downto 2) = "110110" else '0'; -- I/O:D8-DBh / Kanji
-  RomReq <= req when mem = '1' and (rom_main = '1' or rom_opll = '1' or rom_extr = '1') else '0';
+  RomReq <= req when mem = '1' and (rom_main = '1' or rom_opll = '1' or rom_extr = '1' or rom_kbas = '1') else '0';
   MapReq <= req when mem = '0' and adr(7 downto 2) = "111111" else      -- I/O:FC-FFh / Memory-mapper
             req when mem = '1' and iSltMap = '1'              else '0'; -- MEM        / Memory-mapper
   SccReq <= req when mem = '1' and iSltScc = '1'              else '0'; -- MEM:       / ESE-SCC
@@ -1169,6 +1184,7 @@ begin
   --            / MegaRam       600000-67FFFF( 512KB)
   -- Slot 3-0 : Mapper          400000-4FFFFF(1024KB)
   -- Slot 3-1 : SubROM          698000-69BFFF(  16KB)
+  --            Kanji BASIC     688000-68FFFF(  32KB, pages 1-2, TN9K)
   -- Slot 3-2 : MegaSD          680000-68FFFF(  64KB) / 680000-6BFFFF(BIOS:256KB)
   -- Slot 3-3 : IPL-ROM         (blockRAM:512Bytes)
   -- VRAM     : VRAM            700000-71FFFF( 128KB)
@@ -1181,6 +1197,7 @@ begin
                      "101"    & KanAdr(16 downto 0) when rom_kanj   = '1' else
                      "10010"  & adr(14 downto 0)    when rom_main   = '1' else
                      "100110" & adr(13 downto 0)    when rom_extr   = '1' else
+                     "10001" & adr(15) & adr(13 downto 0) when rom_kbas = '1' else
                      "100111" & adr(13 downto 0); --when rom_opll   = '1'
 
 
@@ -1197,8 +1214,14 @@ begin
   VrmDbi    <= pVramDbi;
 
   -- CPU memory: same request / acknowledge as the original RamReq / RamAck.
-  -- Address map (CpuAdr, see above): 0x400000-0x6FFFFF, bit 22 is always 1,
-  -- so the die gets CpuAdr(21 downto 0).
+  -- Die address (4 MB, 22 bits) from CpuAdr (23 bits): bit 21 of CpuAdr is
+  -- always 1 and bit 22 tells the mapper ("010", 0x200000-0x2FFFFF) from the
+  -- rest ("110", 0x600000-0x6FFFFF), so the die gets CpuAdr(22) & (20:0):
+  --   mapper RAM 1 MB   -> 0x000000-0x0FFFFF
+  --   MegaRAM / SCC     -> 0x200000-0x27FFFF
+  --   ESE-RAM (BIOS...) -> 0x280000-0x2BFFFF
+  -- (taking CpuAdr(21 downto 0) made the three overlap: the BIOS RAM test of
+  -- the mapper overwrote the BIOS image)
   -- The request is registered here: the slot / mapper decoding behind
   -- RamReq and CpuAdr is too deep for the memclk domain (1 memclk = 1/4 or
   -- 1/5 of clk21m). It costs one clk21m of latency (the Z80 samples the
@@ -1214,7 +1237,7 @@ begin
       else
         pRamWr <= '0';
       end if;
-      pRamAdr <= CpuAdr(21 downto 0);
+      pRamAdr <= CpuAdr(22) & CpuAdr(20 downto 0);
       pRamDbo <= dbo;
     end if;
   end process;
@@ -1244,6 +1267,7 @@ begin
     end if;
   end process;
   pDbg <= DbgPc & PpiPortA & DbgVdpW;
+  pDbgBus <= adr & dbo & mem & wrt & req & PriSltNum & ExpSltNum0 & ExpSltNum3;
 
   -- pause key (the original sampled it in the SD-RAM sequencer)
   process(clk21m)

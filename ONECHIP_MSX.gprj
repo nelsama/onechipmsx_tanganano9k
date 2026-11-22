@@ -57,6 +57,7 @@
         <File path="src/sound/psg/psg_wave.vhd" type="file.vhdl" enable="1"/>
         <File path="src/sound/scc/megaram.vhd" type="file.vhdl" enable="1"/>
         <File path="src/sound/scc/scc_wave.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/test/flash_dump_top.vhd" type="file.vhdl" enable="1"/>
         <File path="src/test/psram_test_top.vhd" type="file.vhdl" enable="1"/>
         <File path="src/video/doublebuf.vhd" type="file.vhdl" enable="1"/>
         <File path="src/video/graphic123M.vhd" type="file.vhdl" enable="1"/>

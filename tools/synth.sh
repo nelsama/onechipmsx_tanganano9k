@@ -29,6 +29,7 @@ case "${2:-9k}" in
   *)   echo "unknown device '$2'" >&2; exit 2 ;;
 esac
 TOP=${TOP:-emsx_core}
+TOPGENERICS=${TOPGENERICS:-}
 PNR=${PNR:-0}
 GENERICS=${GENERICS:-}
 
@@ -49,11 +50,24 @@ if [ -n "$GENERICS" ]; then
   CORE="$WIN_OUT/emsx_core.vhd"
 fi
 
+# TOPGENERICS: same, on a copy of src/board/tn9k_top.vhd (e.g. DBG_TRACE=true)
+BTOP="$WIN_ROOT/src/board/tn9k_top.vhd"
+if [ -n "$TOPGENERICS" ]; then
+  cp "$ROOT/src/board/tn9k_top.vhd" "$OUT/tn9k_top.vhd"
+  for kv in $TOPGENERICS; do
+    k=${kv%%=*}; v=${kv#*=}
+    sed -i -E "s/^(\s*$k\s*:\s*[^:]+:=\s*)[^;)-]+/\1$v /" "$OUT/tn9k_top.vhd"
+    grep -qE "^\s*$k\s*:.*:=\s*$v\b" "$OUT/tn9k_top.vhd" || { echo "generic $k not set" >&2; exit 2; }
+  done
+  BTOP="$WIN_OUT/tn9k_top.vhd"
+fi
+
 {
   echo "set_device $DEV -device_version C"
-  (cd "$ROOT" && find src -name '*.vhd' ! -name emsx_core.vhd | sort) |
+  (cd "$ROOT" && find src -name '*.vhd' ! -name emsx_core.vhd ! -name tn9k_top.vhd | sort) |
     while read -r f; do echo "add_file -type vhdl $WIN_ROOT/$f"; done
   echo "add_file -type vhdl $CORE"
+  echo "add_file -type vhdl $BTOP"
   echo "set_option -top_module $TOP"
   echo "set_option -vhdl_std vhd1993"
   echo "set_option -output_base_name $TOP"

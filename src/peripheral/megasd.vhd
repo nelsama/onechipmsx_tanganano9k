@@ -150,10 +150,10 @@ begin
 
       mmc_ck <= '1';
       mmc_cs <= '1';
-      mmc_di <= 'Z';
+      mmc_di <= '1';
       epc_ck <= '1';
       epc_cs <= '1';
-      epc_di <= 'Z';
+      epc_di <= '1';
 
     elsif (clk21m'event and clk21m = '1') then
 
@@ -180,8 +180,8 @@ begin
           when "0100" => mmc_di <= MmcDbo(1); epc_di <= MmcDbo(1);
           when "0011" => mmc_di <= MmcDbo(0); epc_di <= MmcDbo(0);
           when "0010" => mmc_di <= '1';       epc_di <= '1';      
-          when "0001" => mmc_di <= 'Z';       epc_di <= '1';      
-          when others => mmc_di <= 'Z';       epc_di <= '1';      
+          when "0001" => mmc_di <= '1';       epc_di <= '1';      
+          when others => mmc_di <= '1';       epc_di <= '1';      
         end case;
       end if;
 
@@ -261,6 +261,8 @@ begin
 
   end process;
 
+  -- TN9K: MOSI (mmc_di / epc_di) idles at '1' instead of 'Z': no pull-ups
+  -- inside the FPGA
   mmcena <= '1' when ErmBank0(7 downto 6) = "01" else '0';
   epc_oe <= '1' when reset = '1' else '0';  -- epc_oe = 0:enable, 1:disable
 

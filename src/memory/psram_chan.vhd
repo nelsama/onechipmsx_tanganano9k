@@ -240,13 +240,14 @@ begin
     end if;
   end process;
 
-  -- TN9K: ck_e_p is registered on clk_p (zf3 registered it on clk). The CK
-  -- ODDR sees it at the same clk_p edge as before, but the quarter-period
-  -- path (clk -> clk_p, 2.9 ns at 86 MHz) is now between two registers the
-  -- placer can put side by side, and ck_e_p -> ODDR gets a full period.
+  -- TN9K: ck_e_p is registered on the FALLING edge of clk_p (zf3: rising
+  -- edge of clk). The CK ODDR (rising clk_p) still sees it at the same edge
+  -- as before (clk edge + 1.25 periods), but the paths get 3/4 of a period
+  -- (clk -> falling clk_p, 8.7 ns at 86 MHz) and half a period (-> ODDR)
+  -- instead of the quarter period (2.9 ns) that failed at 86 MHz.
   process(clk_p)
   begin
-    if rising_edge(clk_p) then
+    if falling_edge(clk_p) then
       ck_e_p <= ck_e;
     end if;
   end process;

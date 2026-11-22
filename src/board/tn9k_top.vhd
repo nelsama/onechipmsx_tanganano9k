@@ -33,7 +33,8 @@
 --   4 the CPU read the main BIOS (the IPL finished and jumped to it)
 --   5 heartbeat (~1.5 s)
 --
--- Debug UART (pins 17 and 32, 115200 8N1), every ~0.8 s:
+-- Debug UART (pins 17 and 32, 115200 8N1), every ~0.8 s (with DBG_TRACE
+-- every ~50 ms and with all the fields below; without it up to RC):
 --   MSX PC=pppp SL=ss VW=vv F=f RC=rrrr WA=wwww WM=wwww RM=rrrr
 --     PC  address of the last opcode fetch (M1)
 --     SL  primary slot register (port A8h)
@@ -45,6 +46,12 @@
 --     WM  bytes the IPL wrote at image offsets 10000h, 10001h (main BIOS,
 --         F3C3 for a real one)
 --     RM  bytes the CPU read back from the main BIOS 0000h, 0001h
+--     LT  longest CPU memory access, request -> acknowledge, in clk21m
+--     BW  first CPU write into the image area after the BIOS started:
+--         valid, die address (19:0), data, PC
+--     T   trace: index ii and entry (PC pppp, slot register ss) of the last
+--         256 opcode-fetch addresses, frozen (Z=1) the first time the CPU
+--         reaches 0038h after entering the BIOS; one entry per line
 --
 library ieee;
 use ieee.std_logic_1164.all;
@@ -52,7 +59,9 @@ use ieee.numeric_std.all;
 
 entity tn9k_top is
   generic (
-    RATIO : integer := 4          -- memclk / clk21m: 4 or 5
+    RATIO : integer := 4;         -- memclk / clk21m: 4 or 5
+    DBG_TRACE : boolean := false  -- opcode-fetch trace on the UART (needs room:
+                                  -- build without OPLL, ENABLE_OPLL=false)
   );
   port (
     clk27       : in    std_logic;
@@ -169,7 +178,25 @@ architecture rtl of tn9k_top is
   signal dbg      : std_logic_vector(31 downto 0);
   signal dg_wa, dg_wm, dg_rm : std_logic_vector(15 downto 0) := (others => '0');
   signal dg_rc    : unsigned(15 downto 0) := (others => '0');
+  signal dg_lc, dg_lt : unsigned(7 downto 0) := (others => '0');
+  signal dg_bwv   : std_logic := '0';
+  signal dg_bw    : std_logic_vector(43 downto 0) := (others => '0');
+  signal dbus     : std_logic_vector(32 downto 0);
+  signal dbreq_d  : std_logic := '0';
+  signal dg_bkv   : std_logic := '0';
+  signal dg_bk    : std_logic_vector(39 downto 0) := (others => '0');
+  -- opcode-fetch trace
+  type tr_t is array (0 to 255) of std_logic_vector(23 downto 0);
+  signal tr       : tr_t;
+  signal tr_w     : unsigned(7 downto 0) := (others => '0');
+  signal tr_r     : unsigned(7 downto 0) := (others => '0');
+  signal tr_q     : std_logic_vector(23 downto 0) := (others => '0');
+  signal tr_frz   : std_logic := '0';
+  signal pc_d     : std_logic_vector(15 downto 0) := (others => '0');
+  signal rep_d    : std_logic := '0';
+  signal rep_cnt  : unsigned(19 downto 0) := (others => '0');
   signal ack_d    : std_logic := '0';
+  signal ack_r    : std_logic := '0';
   signal utx      : std_logic;
   signal audio  : std_logic;
   -- joystick: bit 0 up, 1 down, 2 left, 3 right, 4 trigger A, 5 trigger B
@@ -268,9 +295,10 @@ begin
   begin
     if rising_edge(clk21m) then
       miso_s <= miso_s(0) & flash_miso;
+      ack_r  <= ram_ack;          -- (memclk register: re-registered for the debug logic)
       if msx_rst_n = '0' then
         dg_flash <= '0'; dg_eram <= '0'; dg_main <= '0';
-        dg_rc <= (others => '0');
+        dg_rc <= (others => '0'); dg_lt <= (others => '0'); dg_bwv <= '0'; dg_bkv <= '0';
       else
         if fl_cs_c = '0' and miso_s(1) = '0' then
           dg_flash <= '1';
@@ -282,35 +310,102 @@ begin
         -- main BIOS 0x690000-0x697FFF -> die address 0x290000-0x297FFF
         if ram_req = '1' and ram_wr = '0' and ram_adr(21 downto 15) = "1010010" then
           dg_main <= '1';
-          if ram_ack = '1' and ack_d = '0' then
+          if ack_r = '1' and ack_d = '0' then
             if ram_adr = "10" & x"90000" then dg_rm(15 downto 8) <= ram_dbi; end if;
             if ram_adr = "10" & x"90001" then dg_rm(7 downto 0)  <= ram_dbi; end if;
           end if;
         end if;
-        if ram_req = '1' and ram_wr = '1' and ram_ack = '1' and ack_d = '0' then
-          if ram_adr = "10" & x"80000" then dg_wa(15 downto 8) <= ram_dbo; end if;
-          if ram_adr = "10" & x"80001" then dg_wa(7 downto 0)  <= ram_dbo; end if;
-          if ram_adr = "10" & x"90000" then dg_wm(15 downto 8) <= ram_dbo; end if;
-          if ram_adr = "10" & x"90001" then dg_wm(7 downto 0)  <= ram_dbo; end if;
+        if ram_req = '1' and ram_wr = '1' and ack_r = '1' and ack_d = '0' then
+          if dg_main = '0' then                  -- IPL: the copy of the image
+            if ram_adr = "10" & x"80000" then dg_wa(15 downto 8) <= ram_dbo; end if;
+            if ram_adr = "10" & x"80001" then dg_wa(7 downto 0)  <= ram_dbo; end if;
+            if ram_adr = "10" & x"90000" then dg_wm(15 downto 8) <= ram_dbo; end if;
+            if ram_adr = "10" & x"90001" then dg_wm(7 downto 0)  <= ram_dbo; end if;
+          elsif ram_adr(21 downto 18) = "1010" and dg_bwv = '0' then
+            -- first write into the image area after the BIOS started
+            dg_bwv <= '1';
+            dg_bw  <= ram_adr(19 downto 0) & ram_dbo & dbg(31 downto 16);
+          end if;
         end if;
-        ack_d <= ram_ack;
-        if ram_ack = '1' and ack_d = '0' then
+        -- first write to the ESE-RAM bank registers (slot 3-2, 6000-7FFFh)
+        -- after the BIOS started: address, data, PC
+        dbreq_d <= dbus(6);
+        -- (now: the CPU bus when the first post-BIOS write request into the
+        -- image area appears on the PSRAM port: adr, dbo, mem/wrt/req,
+        -- PriSlt, ExpSlt0, ExpSlt3)
+        if ram_req = '1' and ram_wr = '1' and ram_adr(21 downto 18) = "1010" and
+           dg_main = '1' and dg_bkv = '0' then
+          dg_bkv <= '1';
+          dg_bk  <= dbus(32 downto 17) & dbus(16 downto 9) & "0000000" & dbus(8 downto 0);
+        end if;
+        ack_d <= ack_r;
+        if ack_r = '1' and ack_d = '0' then
           dg_rc <= dg_rc + 1;
         end if;
+        if ram_req = '1' and ack_r = '0' then
+          if dg_lc /= 255 then dg_lc <= dg_lc + 1; end if;
+        else
+          dg_lc <= (others => '0');
+        end if;
+        if dg_lc > dg_lt then dg_lt <= dg_lc; end if;
       end if;
     end if;
   end process;
 
+  -- trace of the opcode-fetch addresses (a new entry when the M1 address
+  -- changes), frozen at the first 0038h after the main BIOS was read
+  g_trace : if DBG_TRACE generate
+  process(clk21m)
+  begin
+    if rising_edge(clk21m) then
+      pc_d <= dbg(31 downto 16);
+      if msx_rst_n = '0' then
+        tr_frz <= '0';
+      elsif tr_frz = '0' and dbg(31 downto 16) /= pc_d then
+        tr(to_integer(tr_w)) <= dbg(31 downto 16) & dbg(15 downto 8);
+        tr_w <= tr_w + 1;
+        if dbg(31 downto 16) = x"0038" and dg_main = '1' then
+          tr_frz <= '1';
+        end if;
+      end if;
+      -- read one entry per report (the reporter snaps at rep_cnt = 0)
+      rep_cnt <= rep_cnt + 1;
+      if rep_cnt = 0 then
+        tr_r <= tr_r + 1;
+      end if;
+      tr_q <= tr(to_integer(tr_w + tr_r));       -- oldest first
+    end if;
+  end process;
+  end generate;
+
+  -- short report (release) / full report with the boot diagnostics (debug)
+  g_uart_rel : if not DBG_TRACE generate
   u_uart : entity work.uart_report
     generic map (
-      TPL => "MSX PC=#### SL=## VW=## F=# RC=#### WA=#### WM=#### RM=####" & CR & LF,
-      NNIB => 25, CLKS_PER_BIT => 188, PERIOD_BITS => 24)
+      TPL => "MSX PC=#### SL=## VW=## F=# RC=####" & CR & LF,
+      NNIB => 13, CLKS_PER_BIT => 188, PERIOD_BITS => 24)
+    port map (
+      clk  => clk21m,
+      snap => dbg(31 downto 16) & dbg(15 downto 8) & dbg(7 downto 0)
+              & dg_flash & dg_eram & dg_main & ps_overrun & std_logic_vector(dg_rc),
+      tx   => utx);
+  end generate;
+
+  g_uart_dbg : if DBG_TRACE generate
+  u_uart : entity work.uart_report
+    generic map (
+      TPL => "MSX PC=#### SL=## VW=## F=# RC=#### WA=#### WM=#### RM=#### LT=## BW=# ##### ## #### BK=# #### ## #### Z=# T=## ######" & CR & LF,
+      NNIB => 27 + 1 + 11 + 1 + 10 + 1 + 2 + 6, CLKS_PER_BIT => 188, PERIOD_BITS => 20)
     port map (
       clk  => clk21m,
       snap => dbg(31 downto 16) & dbg(15 downto 8) & dbg(7 downto 0)
               & dg_flash & dg_eram & dg_main & ps_overrun & std_logic_vector(dg_rc)
-              & dg_wa & dg_wm & dg_rm,
+              & dg_wa & dg_wm & dg_rm & std_logic_vector(dg_lt)
+              & "000" & dg_bwv & dg_bw & "000" & dg_bkv & dg_bk
+              & "000" & tr_frz & std_logic_vector(tr_r) & tr_q,
       tx   => utx);
+  end generate;
+
   uart_tx  <= utx;
   uart_tx2 <= utx;
 
@@ -366,7 +461,8 @@ begin
       pVideoHS_n => vhs_n,
       pVideoVS_n => vvs_n,
       pAudio    => audio,
-      pDbg      => dbg
+      pDbg      => dbg,
+      pDbgBus   => dbus
     );
 
   u_mem : entity work.psram_msx

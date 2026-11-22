@@ -4,9 +4,12 @@
 The IPL copies 256 KB into the ESE-RAM (CPU memory 0x680000-0x6BFFFF), from
 the SD card (FAT16, SD <= 2 GB: the first file of a freshly formatted card,
 whose first sector must start with "AB") or, failing that, from the SPI
-flash at 0x40000. The core maps the image as (see CpuAdr in emsx_core.vhd):
+flash at 0x000000 (TN9K; the original IPL used 0x040000). The core maps the image as (see CpuAdr in emsx_core.vhd):
 
-    0x00000  64 KB  MegaSD disk driver ROM (slot 3-2), must start with "AB"
+    0x00000  64 KB  MegaSD disk driver ROM (slot 3-2), must start with "AB";
+                    TN9K: with --kbasic only 32 KB, the upper half holds:
+    0x08000  32 KB  Kanji BASIC (slot 3-1, pages 1-2): every Japanese MSX2+
+                    SUB-ROM calls into it at boot (7A00h of its own slot)
     0x10000  32 KB  MSX2/2+ main BIOS (slot 0-0)
     0x18000  16 KB  SUB-ROM (slot 3-1)
     0x1C000  16 KB  FM-BIOS / MSX-MUSIC (slot 0-2)
@@ -47,7 +50,8 @@ def main():
     ap.add_argument("--sub", required=True, help="SUB-ROM, 16 KB (starts 'CD')")
     ap.add_argument("--fm", required=True, help="FM-BIOS, 16 KB (starts 'AB')")
     ap.add_argument("--kanji", required=True, help="kanji font, >= 128 KB (first 128 KB used)")
-    ap.add_argument("--disk", help="MegaSD driver ROM, <= 64 KB (starts 'AB')")
+    ap.add_argument("--disk", help="MegaSD driver ROM, <= 64 KB (<= 32 KB with --kbasic) (starts 'AB')")
+    ap.add_argument("--kbasic", help="Kanji BASIC, 32 KB (starts 'AB'), needed by MSX2+ BIOSes")
     ap.add_argument("-o", "--out", required=True)
     a = ap.parse_args()
 
@@ -59,6 +63,11 @@ def main():
     else:
         # empty ROM header: "AB", INIT/STATEMENT/DEVICE/TEXT = 0
         disk = b"AB" + b"\x00" * 14 + b"\xff" * (0x10000 - 16)
+
+    if a.kbasic:
+        if disk[0x8000:] != bytes([0xff]) * 0x8000:
+            sys.exit("disk: with --kbasic the disk driver must fit in 32 KB")
+        disk = disk[:0x8000] + load(a.kbasic, 0x8000, "kbasic", b"AB")
 
     img = (disk
            + load(a.main, 0x8000, "main", b"\xf3\xc3")
