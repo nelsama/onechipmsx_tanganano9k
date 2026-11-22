@@ -15,6 +15,12 @@ flash at 0x000000 (TN9K; the original IPL used 0x040000). The core maps the imag
     0x1C000  16 KB  FM-BIOS / MSX-MUSIC (slot 0-2)
     0x20000 128 KB  kanji font, JIS level 1
 
+Without --kbasic the SUB-ROM is patched so that it does not call the Kanji
+BASIC at boot: the 11-byte routine at SUB-ROM 2CB9h (LD IY,slot / LD IX,7A00h
+/ JP CALSLT), copied to F55Eh and called through the H.NMI hook by every
+MSX2+ SUB-ROM, starts with RET (C9h) instead. Without the patch or the Kanji
+BASIC the boot hangs.
+
 Without --disk a 64 KB stub with an empty "AB" header (no INIT routine) is
 used: the IPL accepts the image, the BIOS skips the slot, the machine boots
 to BASIC without disk access.
@@ -69,9 +75,19 @@ def main():
             sys.exit("disk: with --kbasic the disk driver must fit in 32 KB")
         disk = disk[:0x8000] + load(a.kbasic, 0x8000, "kbasic", b"AB")
 
+    sub = load(a.sub, 0x4000, "sub", b"CD")
+    if not a.kbasic:
+        # every MSX2+ SUB-ROM calls the Kanji BASIC at boot (see above)
+        call = bytes.fromhex("FD210000DD21007AC31C00")
+        if sub[0x2CB9:0x2CB9 + 11] != call:
+            sys.exit("sub: the Kanji BASIC boot call is not at 2CB9h (%s); use --kbasic"
+                     % sub[0x2CB9:0x2CB9 + 11].hex(" "))
+        sub = sub[:0x2CB9] + b"\xc9" + sub[0x2CBA:]
+        print("SUB-ROM patched: no Kanji BASIC call at boot (2CB9h = RET)")
+
     img = (disk
            + load(a.main, 0x8000, "main", b"\xf3\xc3")
-           + load(a.sub, 0x4000, "sub", b"CD")
+           + sub
            + load(a.fm, 0x4000, "fm", b"AB")
            + load(a.kanji, 0x20000, "kanji", allow_bigger=True))
     assert len(img) == 0x40000
