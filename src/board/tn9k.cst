@@ -82,3 +82,9 @@ IO_LOC "audio_l" 77;
 IO_PORT "audio_l" IO_TYPE=LVCMOS33 DRIVE=8;
 IO_LOC "audio_r" 76;
 IO_PORT "audio_r" IO_TYPE=LVCMOS33 DRIVE=8;
+
+// --- Debug UART TX, 115200 8N1 (17 = on-board USB-UART, 32 = external) ---
+IO_LOC "uart_tx" 17;
+IO_PORT "uart_tx" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8;
+IO_LOC "uart_tx2" 32;
+IO_PORT "uart_tx2" IO_TYPE=LVCMOS33 PULL_MODE=UP DRIVE=8;

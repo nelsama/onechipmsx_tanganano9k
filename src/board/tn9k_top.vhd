@@ -20,8 +20,28 @@
 -- right 40, fire 29) + button 2 (pin 35, trigger B) and button 3 (pin 42,
 -- SPACE key). Audio: mono PWM on both L (77) and R (76).
 --
--- LEDs (active low): 0 SD access, 1 VRAM overrun (sticky), 2 PSRAM not
--- ready, 3 HDMI not locked to the VDP, 4 MSX in reset, 5 heartbeat (~1 Hz).
+-- SPI flash: while the MSX is in reset, a 0xAB "release from deep
+-- power-down" is sent to the flash (the IPL-ROM reads it with 0x03 only),
+-- then the pins go to megasd (former EPCS port).
+--
+-- LEDs (active low, "lit" = condition true). Boot diagnostics, cleared by
+-- the MSX reset and sticky afterwards:
+--   0 the flash answered (MISO seen low with CS active)
+--   1 VRAM overrun (PSRAM too slow for the VDP)
+--   2 PSRAM not ready
+--   3 the IPL wrote the BIOS RAM area (ESE-RAM, CPU memory 0x680000)
+--   4 the CPU read the main BIOS (the IPL finished and jumped to it)
+--   5 heartbeat (~1.5 s)
+--
+-- Debug UART (pins 17 and 32, 115200 8N1), every ~0.8 s:
+--   MSX PC=pppp SL=ss VW=vv B0=bb F=f RC=rrrr
+--     PC  address of the last opcode fetch (M1)
+--     SL  primary slot register (port A8h)
+--     VW  CPU writes to the VDP ports 98-9Bh (8-bit counter)
+--     B0  first byte the CPU read from the main BIOS (F3 for a real BIOS)
+--     F   bit 3 flash answered, 2 IPL wrote the BIOS area, 1 CPU read the
+--         main BIOS, 0 VRAM overrun
+--     RC  CPU memory accesses (16-bit counter)
 --
 library ieee;
 use ieee.std_logic_1164.all;
@@ -71,6 +91,10 @@ entity tn9k_top is
     -- audio (1-bit PWM, RC filter outside): the MSX is mono, same on L and R
     audio_l     : out   std_logic;
     audio_r     : out   std_logic;
+
+    -- debug UART, 115200 8N1 (17 = on-board USB-UART, 32 = external)
+    uart_tx     : out   std_logic;
+    uart_tx2    : out   std_logic;
 
     -- embedded PSRAM (fixed names, no .cst entries)
     O_psram_ck      : out   std_logic_vector(1 downto 0);
@@ -134,6 +158,17 @@ architecture rtl of tn9k_top is
   signal hhs, hvs, hde, hlocked : std_logic;
 
   signal led_sd : std_logic;
+  -- flash wake-up and boot diagnostics
+  signal fl_cs_c, fl_ck_c, fl_di_c : std_logic;     -- from the core
+  signal fl_cs_w, fl_ck_w, fl_di_w : std_logic := '1';
+  signal miso_s : std_logic_vector(1 downto 0) := (others => '1');
+  signal dg_flash, dg_eram, dg_main : std_logic := '0';
+  signal dbg      : std_logic_vector(31 downto 0);
+  signal dg_b0    : std_logic_vector(7 downto 0) := (others => '0');
+  signal dg_b0v   : std_logic := '0';
+  signal dg_rc    : unsigned(15 downto 0) := (others => '0');
+  signal ack_d    : std_logic := '0';
+  signal utx      : std_logic;
   signal audio  : std_logic;
   -- joystick: bit 0 up, 1 down, 2 left, 3 right, 4 trigger A, 5 trigger B
   signal joy_s1, joy_s2 : std_logic_vector(6 downto 0) := (others => '1');
@@ -202,6 +237,74 @@ begin
   end process;
   pix_rst <= pix_rst_sr(3);
 
+  -- flash wake-up (SPI mode 3, SCK = clk21m / 4) during the MSX reset:
+  -- por_cnt 256 .. 291 -> CS low, 8 bits of 0xAB, CS high; tRES1 = 3 us is
+  -- far shorter than the rest of the reset (~3 ms)
+  process(clk21m)
+    constant CMD : std_logic_vector(7 downto 0) := x"AB";
+    variable w : integer range 0 to 65535;
+  begin
+    if rising_edge(clk21m) then
+      w := to_integer(por_cnt);
+      fl_cs_w <= '1'; fl_ck_w <= '1'; fl_di_w <= '1';
+      if w >= 256 and w < 256 + 36 then
+        fl_cs_w <= '0';
+        if w < 256 + 32 then
+          fl_di_w <= CMD(7 - (w - 256) / 4);
+          if ((w - 256) mod 4) < 2 then fl_ck_w <= '0'; end if;
+        end if;
+      end if;
+    end if;
+  end process;
+
+  flash_cs_n <= fl_cs_w when msx_rst_n = '0' else fl_cs_c;
+  flash_clk  <= fl_ck_w when msx_rst_n = '0' else fl_ck_c;
+  flash_mosi <= fl_di_w when msx_rst_n = '0' else fl_di_c;
+
+  -- boot diagnostics
+  process(clk21m)
+  begin
+    if rising_edge(clk21m) then
+      miso_s <= miso_s(0) & flash_miso;
+      if msx_rst_n = '0' then
+        dg_flash <= '0'; dg_eram <= '0'; dg_main <= '0';
+        dg_b0v <= '0'; dg_rc <= (others => '0');
+      else
+        if fl_cs_c = '0' and miso_s(1) = '0' then
+          dg_flash <= '1';
+        end if;
+        -- ESE-RAM 0x680000-0x6BFFFF -> die address 0x280000-0x2BFFFF
+        if ram_req = '1' and ram_wr = '1' and ram_adr(21 downto 18) = "1010" then
+          dg_eram <= '1';
+        end if;
+        -- main BIOS 0x690000-0x697FFF -> die address 0x290000-0x297FFF
+        if ram_req = '1' and ram_wr = '0' and ram_adr(21 downto 15) = "1010010" then
+          dg_main <= '1';
+          if ram_ack = '1' and dg_b0v = '0' then
+            dg_b0  <= ram_dbi;
+            dg_b0v <= '1';
+          end if;
+        end if;
+        ack_d <= ram_ack;
+        if ram_ack = '1' and ack_d = '0' then
+          dg_rc <= dg_rc + 1;
+        end if;
+      end if;
+    end if;
+  end process;
+
+  u_uart : entity work.uart_report
+    generic map (
+      TPL => "MSX PC=#### SL=## VW=## B0=## F=# RC=####" & CR & LF,
+      NNIB => 15, CLKS_PER_BIT => 188, PERIOD_BITS => 24)
+    port map (
+      clk  => clk21m,
+      snap => dbg(31 downto 16) & dbg(15 downto 8) & dbg(7 downto 0) & dg_b0
+              & dg_flash & dg_eram & dg_main & ps_overrun & std_logic_vector(dg_rc),
+      tx   => utx);
+  uart_tx  <= utx;
+  uart_tx2 <= utx;
+
   -- joystick / buttons synchronised to clk21m
   process(clk21m)
   begin
@@ -243,9 +346,9 @@ begin
       pSd_Cm    => sd_cmd,
       pSd_Cs    => sd_cs,
       pSd_Do    => sd_dat0,
-      pEpc_Ck   => flash_clk,
-      pEpc_Cs   => flash_cs_n,
-      pEpc_Di   => flash_mosi,
+      pEpc_Ck   => fl_ck_c,
+      pEpc_Cs   => fl_cs_c,
+      pEpc_Di   => fl_di_c,
       pEpc_Do   => flash_miso,
       pLedSd    => led_sd,
       pVideoR   => vr,
@@ -253,7 +356,8 @@ begin
       pVideoB   => vb,
       pVideoHS_n => vhs_n,
       pVideoVS_n => vvs_n,
-      pAudio    => audio
+      pAudio    => audio,
+      pDbg      => dbg
     );
 
   u_mem : entity work.psram_msx
@@ -299,11 +403,11 @@ begin
     end if;
   end process;
 
-  led_n(0) <= not led_sd;
+  led_n(0) <= not dg_flash;
   led_n(1) <= not ps_overrun;
   led_n(2) <= ps_ready;
-  led_n(3) <= hlocked;
-  led_n(4) <= msx_rst_n;
+  led_n(3) <= not dg_eram;
+  led_n(4) <= not dg_main;
   led_n(5) <= beat(24);
 
 end architecture;

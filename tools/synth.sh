@@ -58,8 +58,8 @@ fi
   echo "set_option -vhdl_std vhd1993"
   echo "set_option -output_base_name $TOP"
   if [ "$PNR" = 1 ]; then
-    echo "add_file -type cst $WIN_ROOT/src/board/tn9k.cst"
-    echo "add_file -type sdc $WIN_ROOT/src/board/tn9k.sdc"
+    echo "add_file -type cst $WIN_ROOT/${CST:-src/board/tn9k.cst}"
+    echo "add_file -type sdc $WIN_ROOT/${SDC:-src/board/tn9k.sdc}"
     echo "set_option -use_mspi_as_gpio 1"
     echo "set_option -timing_driven 1"
     echo "set_option -place_option ${PLACE_OPT:-0}"

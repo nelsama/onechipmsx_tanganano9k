@@ -103,7 +103,11 @@ entity emsx_core is
     pVideoVS_n  : out std_logic;
 
     -- Audio (1-bit PWM, needs an RC low-pass filter)
-    pAudio      : out std_logic
+    pAudio      : out std_logic;
+
+    -- TN9K debug: address of the last opcode fetch (M1) & primary slot
+    -- register (port A8h) & count of CPU writes to the VDP ports 98-9Bh
+    pDbg        : out std_logic_vector(31 downto 0)
   );
 end emsx_core;
 
@@ -580,6 +584,8 @@ architecture rtl of emsx_core is
   signal CpuAdr      : std_logic_vector(22 downto 0);
 
   signal SdPaus      : std_logic;
+  signal DbgPc       : std_logic_vector(15 downto 0) := (others => '0');
+  signal DbgVdpW     : std_logic_vector(7 downto 0);
 
 
 begin
@@ -1214,6 +1220,30 @@ begin
   end process;
   RamDbi  <= pRamDbi;
   RamAck  <= pRamAck and RamReq;
+
+  -- TN9K debug port
+  process(clk21m)
+    variable vdpw_d : std_logic := '0';
+    variable vdpw   : std_logic;
+  begin
+    if (clk21m'event and clk21m = '1') then
+      if (CpuM1_n = '0' and BusMerq_n = '0') then
+        DbgPc <= BusAdr;
+      end if;
+      if (req = '1' and mem = '0' and adr(7 downto 2) = "100110" and wrt = '1') then
+        vdpw := '1';
+      else
+        vdpw := '0';
+      end if;
+      if (reset = '1') then
+        DbgVdpW <= (others => '0');
+      elsif (vdpw = '1' and vdpw_d = '0') then
+        DbgVdpW <= DbgVdpW + 1;
+      end if;
+      vdpw_d := vdpw;
+    end if;
+  end process;
+  pDbg <= DbgPc & PpiPortA & DbgVdpW;
 
   -- pause key (the original sampled it in the SD-RAM sequencer)
   process(clk21m)
