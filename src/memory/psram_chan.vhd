@@ -140,7 +140,6 @@ begin
     if rising_edge(clk) then
       cycles_sr <= cycles_sr(22 downto 0) & '0';
       dq_sr <= dq_sr(47 downto 0) & x"0000";
-      ck_e_p <= ck_e;
 
       if state = INIT_ST and cfg_now = '1' then
         cycles_sr <= (others => '0');
@@ -232,6 +231,17 @@ begin
         rwds_out_ris <= '0';
         rwds_out_fal <= '0';
       end if;
+    end if;
+  end process;
+
+  -- TN9K: ck_e_p is registered on clk_p (zf3 registered it on clk). The CK
+  -- ODDR sees it at the same clk_p edge as before, but the quarter-period
+  -- path (clk -> clk_p, 2.9 ns at 86 MHz) is now between two registers the
+  -- placer can put side by side, and ck_e_p -> ODDR gets a full period.
+  process(clk_p)
+  begin
+    if rising_edge(clk_p) then
+      ck_e_p <= ck_e;
     end if;
   end process;
 

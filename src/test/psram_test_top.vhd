@@ -59,6 +59,9 @@ architecture rtl of psram_test_top is
   signal p_valid    : std_logic := '0';               -- previous dot was a read
   signal p_adr      : std_logic_vector(16 downto 0);
   signal p_exp      : std_logic_vector(7 downto 0);
+  signal q_valid    : std_logic := '0';               -- access of the previous dot
+  signal q_adr      : std_logic_vector(16 downto 0);
+  signal q_exp      : std_logic_vector(7 downto 0);
   signal err0       : std_logic := '0';
 
   -- CPU-like port
@@ -125,6 +128,9 @@ begin
           adr  <= std_logic_vector(v_idx);
           dbo  <= pat(v_idx, v_pass);
           we_n <= v_rd;
+          q_valid <= p_valid;
+          q_adr <= p_adr;
+          q_exp <= p_exp;
           p_valid <= v_rd;
           p_adr <= std_logic_vector(v_idx);
           p_exp <= pat(v_idx, v_pass);
@@ -135,12 +141,12 @@ begin
           v_idx <= v_idx + 1;
         end if;
         -- edge E0 + 6 of an access = the edge entering ph = 2 of the next
-        -- dot; p_* still describe that access until ph = 3
-        if ph = 1 and p_valid = '1' then
-          if p_adr(16) = '1' then lane := dbi(15 downto 8); else lane := dbi(7 downto 0); end if;
-          if lane /= p_exp then
+        -- dot; at E0 + 4 its p_* moved to q_*
+        if ph = 1 and q_valid = '1' then
+          if q_adr(16) = '1' then lane := dbi(15 downto 8); else lane := dbi(7 downto 0); end if;
+          if lane /= q_exp then
             if err0 = '0' then
-              f0a <= "000" & p_adr; f0g <= lane; f0x <= p_exp;
+              f0a <= "000" & q_adr; f0g <= lane; f0x <= q_exp;
             end if;
             err0 <= '1';
             if e0n /= x"FFFF" then e0n <= e0n + 1; end if;

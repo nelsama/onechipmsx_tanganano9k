@@ -34,14 +34,17 @@
 --   5 heartbeat (~1.5 s)
 --
 -- Debug UART (pins 17 and 32, 115200 8N1), every ~0.8 s:
---   MSX PC=pppp SL=ss VW=vv B0=bb F=f RC=rrrr
+--   MSX PC=pppp SL=ss VW=vv F=f RC=rrrr WA=wwww WM=wwww RM=rrrr
 --     PC  address of the last opcode fetch (M1)
 --     SL  primary slot register (port A8h)
 --     VW  CPU writes to the VDP ports 98-9Bh (8-bit counter)
---     B0  first byte the CPU read from the main BIOS (F3 for a real BIOS)
 --     F   bit 3 flash answered, 2 IPL wrote the BIOS area, 1 CPU read the
 --         main BIOS, 0 VRAM overrun
 --     RC  CPU memory accesses (16-bit counter)
+--     WA  bytes the IPL wrote at BIOS image offsets 0, 1 (4142 = "AB")
+--     WM  bytes the IPL wrote at image offsets 10000h, 10001h (main BIOS,
+--         F3C3 for a real one)
+--     RM  bytes the CPU read back from the main BIOS 0000h, 0001h
 --
 library ieee;
 use ieee.std_logic_1164.all;
@@ -164,8 +167,7 @@ architecture rtl of tn9k_top is
   signal miso_s : std_logic_vector(1 downto 0) := (others => '1');
   signal dg_flash, dg_eram, dg_main : std_logic := '0';
   signal dbg      : std_logic_vector(31 downto 0);
-  signal dg_b0    : std_logic_vector(7 downto 0) := (others => '0');
-  signal dg_b0v   : std_logic := '0';
+  signal dg_wa, dg_wm, dg_rm : std_logic_vector(15 downto 0) := (others => '0');
   signal dg_rc    : unsigned(15 downto 0) := (others => '0');
   signal ack_d    : std_logic := '0';
   signal utx      : std_logic;
@@ -268,7 +270,7 @@ begin
       miso_s <= miso_s(0) & flash_miso;
       if msx_rst_n = '0' then
         dg_flash <= '0'; dg_eram <= '0'; dg_main <= '0';
-        dg_b0v <= '0'; dg_rc <= (others => '0');
+        dg_rc <= (others => '0');
       else
         if fl_cs_c = '0' and miso_s(1) = '0' then
           dg_flash <= '1';
@@ -280,10 +282,16 @@ begin
         -- main BIOS 0x690000-0x697FFF -> die address 0x290000-0x297FFF
         if ram_req = '1' and ram_wr = '0' and ram_adr(21 downto 15) = "1010010" then
           dg_main <= '1';
-          if ram_ack = '1' and dg_b0v = '0' then
-            dg_b0  <= ram_dbi;
-            dg_b0v <= '1';
+          if ram_ack = '1' and ack_d = '0' then
+            if ram_adr = "10" & x"90000" then dg_rm(15 downto 8) <= ram_dbi; end if;
+            if ram_adr = "10" & x"90001" then dg_rm(7 downto 0)  <= ram_dbi; end if;
           end if;
+        end if;
+        if ram_req = '1' and ram_wr = '1' and ram_ack = '1' and ack_d = '0' then
+          if ram_adr = "10" & x"80000" then dg_wa(15 downto 8) <= ram_dbo; end if;
+          if ram_adr = "10" & x"80001" then dg_wa(7 downto 0)  <= ram_dbo; end if;
+          if ram_adr = "10" & x"90000" then dg_wm(15 downto 8) <= ram_dbo; end if;
+          if ram_adr = "10" & x"90001" then dg_wm(7 downto 0)  <= ram_dbo; end if;
         end if;
         ack_d <= ram_ack;
         if ram_ack = '1' and ack_d = '0' then
@@ -295,12 +303,13 @@ begin
 
   u_uart : entity work.uart_report
     generic map (
-      TPL => "MSX PC=#### SL=## VW=## B0=## F=# RC=####" & CR & LF,
-      NNIB => 15, CLKS_PER_BIT => 188, PERIOD_BITS => 24)
+      TPL => "MSX PC=#### SL=## VW=## F=# RC=#### WA=#### WM=#### RM=####" & CR & LF,
+      NNIB => 25, CLKS_PER_BIT => 188, PERIOD_BITS => 24)
     port map (
       clk  => clk21m,
-      snap => dbg(31 downto 16) & dbg(15 downto 8) & dbg(7 downto 0) & dg_b0
-              & dg_flash & dg_eram & dg_main & ps_overrun & std_logic_vector(dg_rc),
+      snap => dbg(31 downto 16) & dbg(15 downto 8) & dbg(7 downto 0)
+              & dg_flash & dg_eram & dg_main & ps_overrun & std_logic_vector(dg_rc)
+              & dg_wa & dg_wm & dg_rm,
       tx   => utx);
   uart_tx  <= utx;
   uart_tx2 <= utx;
