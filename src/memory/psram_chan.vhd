@@ -206,8 +206,14 @@ begin
           additional_latency <= rwds_in_fal;
         end if;
 
-        -- with FIXED, RWDS is high during CA: always the 2x path
-        if ((cycles_sr(2 + LATENCY) = '1') and ((LATENCY = 3 and rwds_in_fal = '0') or (LATENCY /= 3 and additional_latency = '0'))) or
+        -- TN9K: with FIXED the device always uses the 2x latency, so RWDS is
+        -- not looked at. (zf3 samples RWDS here to choose 1x / 2x; right
+        -- after a read the line can still show the read's level at that
+        -- cycle, the 1x path was taken and the write was lost: one lost
+        -- write per read -> write turn-around, seen on the board at
+        -- 86.4 MHz with back-to-back accesses.)
+        if (not FIXED and (cycles_sr(2 + LATENCY) = '1') and
+            ((LATENCY = 3 and rwds_in_fal = '0') or (LATENCY /= 3 and additional_latency = '0'))) or
            (cycles_sr(2 + LATENCY * 2) = '1') then
           rwds_oen <= '0';
           if byte_write = '1' then
