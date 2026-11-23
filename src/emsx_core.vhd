@@ -452,6 +452,7 @@ architecture rtl of emsx_core is
   signal rom_main    : std_logic;
   signal rom_opll    : std_logic;
   signal rom_extr    : std_logic;
+  signal rom_kbas    : std_logic;
   signal rom_kanj    : std_logic;
 
   -- IPL-ROM signals
@@ -854,7 +855,7 @@ begin
         else                            -- disable SD/MMC drive
           jSltMem <= '0';
         end if;
-      elsif (mem = '1' and (iSltMap = '1' or rom_main = '1' or rom_opll = '1' or rom_extr = '1')) then
+      elsif (mem = '1' and (iSltMap = '1' or rom_main = '1' or rom_opll = '1' or rom_extr = '1' or rom_kbas = '1')) then
           jSltMem <= '1';
 --    elsif (mem = '0' and (rom_kanj = '1')) then
 --        jSltMem <= '1';
@@ -1030,6 +1031,12 @@ begin
   rom_extr <= '0' when adr(15 downto 14) /= "00"                           else      -- SUB-ROM
               mem when PriSltNum  = "11" and
                        ExpSltNum3 = "01" and SelfMode = '1'                else '0';
+  -- TN9K: Kanji BASIC (32 KB) in slot 3-1, pages 1-2, like every Japanese
+  -- MSX2+: the SUB-ROM calls it at boot (7A00h of its own slot) for the
+  -- scrolling MSX2+ logo. Image offset 0x20000 (the kanji font area).
+  rom_kbas <= '0' when adr(15 downto 14) /= "01" and adr(15 downto 14) /= "10" else
+              mem when PriSltNum  = "11" and
+                       ExpSltNum3 = "01" and SelfMode = '1'                else '0';
   rom_kanj <= '0' when mem = '1'                                           else      -- Kanji-ROM
               '1' when adr(7 downto 2) = "110110" and SelfMode = '1'       else '0';
 
@@ -1044,7 +1051,7 @@ begin
   PpiReq <= req when mem = '0' and adr(7 downto 2) = "101010" else '0'; -- I/O:A8-ABh / PPI(8255)
   OpllReq<= req when mem = '0' and adr(7 downto 2) = "011111" else '0'; -- I/O:7C-7Fh / OPLL(YM2413)
   KanReq <= req when mem = '0' and adr(7 downto 2) = "110110" else '0'; -- I/O:D8-DBh / Kanji
-  RomReq <= req when mem = '1' and (rom_main = '1' or rom_opll = '1' or rom_extr = '1') else '0';
+  RomReq <= req when mem = '1' and (rom_main = '1' or rom_opll = '1' or rom_extr = '1' or rom_kbas = '1') else '0';
   MapReq <= req when mem = '0' and adr(7 downto 2) = "111111" else      -- I/O:FC-FFh / Memory-mapper
             req when mem = '1' and iSltMap = '1'              else '0'; -- MEM        / Memory-mapper
   SccReq <= req when mem = '1' and iSltScc = '1'              else '0'; -- MEM:       / ESE-SCC
@@ -1178,6 +1185,7 @@ begin
   --            / MegaRam       600000-67FFFF( 512KB)
   -- Slot 3-0 : Mapper          400000-4FFFFF(1024KB)
   -- Slot 3-1 : SubROM          698000-69BFFF(  16KB)
+  --            Kanji BASIC     6A0000-6A7FFF(  32KB, pages 1-2, TN9K)
   -- Slot 3-2 : MegaSD          680000-68FFFF(  64KB) / 680000-6BFFFF(BIOS:256KB)
   -- Slot 3-3 : IPL-ROM         (blockRAM:512Bytes)
   -- VRAM     : VRAM            700000-71FFFF( 128KB)
@@ -1190,6 +1198,7 @@ begin
                      "101"    & KanAdr(16 downto 0) when rom_kanj   = '1' else
                      "10010"  & adr(14 downto 0)    when rom_main   = '1' else
                      "100110" & adr(13 downto 0)    when rom_extr   = '1' else
+                     "10100" & adr(15) & adr(13 downto 0) when rom_kbas = '1' else
                      "100111" & adr(13 downto 0); --when rom_opll   = '1'
 
 

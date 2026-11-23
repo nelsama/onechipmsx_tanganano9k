@@ -6,15 +6,15 @@ the SD card (FAT16, SD <= 2 GB: the first file of a freshly formatted card,
 whose first sector must start with "AB") or, failing that, from the SPI
 flash at 0x000000 (TN9K; the original IPL used 0x040000). The core maps the image as (see CpuAdr in emsx_core.vhd):
 
-    0x00000  64 KB  MegaSD disk driver ROM (slot 3-2), must start with "AB";
-                    TN9K: with --kbasic only 32 KB, the upper half holds:
-    0x08000  32 KB  Kanji BASIC (slot 3-1, pages 1-2): every Japanese MSX2+
-                    SUB-ROM calls into it at boot (7A00h of its own slot)
+    0x00000  64 KB  MegaSD disk driver ROM (slot 3-2), must start with "AB"
     0x10000  32 KB  MSX2/2+ main BIOS (slot 0-0)
     0x18000  16 KB  SUB-ROM (slot 3-1)
     0x1C000  16 KB  FM-BIOS / MSX-MUSIC (slot 0-2)
     0x20000 128 KB  kanji font, JIS level 1 (optional; the TN9K core has no
                     kanji ROM hardware by default)
+         or  32 KB  Kanji BASIC (slot 3-1, pages 1-2, TN9K): every Japanese
+                    MSX2+ SUB-ROM calls it at boot (7A00h of its own slot),
+                    which scrolls the MSX2+ logo
 
 Without --kbasic the SUB-ROM is patched so that it does not call the Kanji
 BASIC at boot: the 11-byte routine at SUB-ROM 2CB9h (LD IY,slot / LD IX,7A00h
@@ -58,8 +58,9 @@ def main():
     ap.add_argument("--fm", required=True, help="FM-BIOS, 16 KB (starts 'AB')")
     ap.add_argument("--kanji", help="kanji font, >= 128 KB (first 128 KB used); TN9K: not used "
                                     "(the core is built with ENABLE_KANJI = false), the area is left empty")
-    ap.add_argument("--disk", help="MegaSD driver ROM, <= 64 KB (<= 32 KB with --kbasic) (starts 'AB')")
-    ap.add_argument("--kbasic", help="Kanji BASIC, 32 KB (starts 'AB'), needed by MSX2+ BIOSes")
+    ap.add_argument("--disk", help="MegaSD driver ROM, <= 64 KB (starts 'AB')")
+    ap.add_argument("--kbasic", help="Kanji BASIC, 32 KB (starts 'AB'): MSX2+ logo animation; "
+                                     "goes to 0x20000, not together with --kanji")
     ap.add_argument("-o", "--out", required=True)
     a = ap.parse_args()
 
@@ -72,10 +73,14 @@ def main():
         # empty ROM header: "AB", INIT/STATEMENT/DEVICE/TEXT = 0
         disk = b"AB" + b"\x00" * 14 + b"\xff" * (0x10000 - 16)
 
+    if a.kbasic and a.kanji:
+        sys.exit("--kbasic and --kanji share the area at 0x20000")
     if a.kbasic:
-        if disk[0x8000:] != bytes([0xff]) * 0x8000:
-            sys.exit("disk: with --kbasic the disk driver must fit in 32 KB")
-        disk = disk[:0x8000] + load(a.kbasic, 0x8000, "kbasic", b"AB")
+        tail = load(a.kbasic, 0x8000, "kbasic", b"AB") + bytes([0xff]) * 0x18000
+    elif a.kanji:
+        tail = load(a.kanji, 0x20000, "kanji", allow_bigger=True)
+    else:
+        tail = bytes([0xff]) * 0x20000
 
     sub = load(a.sub, 0x4000, "sub", b"CD")
     if not a.kbasic:
@@ -91,7 +96,7 @@ def main():
            + load(a.main, 0x8000, "main", b"\xf3\xc3")
            + sub
            + load(a.fm, 0x4000, "fm", b"AB")
-           + (load(a.kanji, 0x20000, "kanji", allow_bigger=True) if a.kanji else bytes([0xff]) * 0x20000))
+           + tail)
     assert len(img) == 0x40000
 
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
