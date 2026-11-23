@@ -1,5 +1,7 @@
 # Fase 0 — Recursos del diseño original (2026-11-20)
 
+> Documento histórico del port. El estado actual está en [arquitectura.md](arquitectura.md).
+
 GowinSynthesis 1.9.12.03, `tools/synth.sh`. Diseño sin recortes, PLL stub (`xil_pll4x.vhd`).
 
 ## Total en GW1NR-9 (Tang Nano 9K)

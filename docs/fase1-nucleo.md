@@ -1,5 +1,7 @@
 # Fase 1 — Núcleo `emsx_core` sin bus externo (2026-11-20)
 
+> Documento histórico del port. El estado actual está en [arquitectura.md](arquitectura.md).
+
 ## Qué cambió
 
 - `src/emsx_top.vhd` → `src/emsx_core.vhd` (entidad `emsx_core`): sin pines de slot, sin PLL.

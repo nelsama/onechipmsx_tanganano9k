@@ -1,5 +1,7 @@
 # Fase 2 — Hallazgos de placa y el problema de latencia de VRAM (2026-11-20)
 
+> Documento histórico del port. El estado actual está en [arquitectura.md](arquitectura.md).
+
 ## Pines Tang Nano 9K (GW1NR-LV9QN88PC6/I5) confirmados
 
 Fuentes: sipeed/TangNano-9K-example (led, hdmi, uart, picotiny, lcd_led, spi_lcd),
