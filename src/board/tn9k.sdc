@@ -38,7 +38,7 @@ set_multicycle_path -from [get_regs {u_mem/dbi0*}] -setup -start 4
 set_multicycle_path -from [get_regs {u_mem/dbi0*}] -hold -start 3
 
 // CPU read data: psram_msx updates dbi_i once per access, ~335 ns after the
-// Z80 starts the memory cycle; the Z80 samples it at ~417 ns (T3 rising).
+// Z80 starts the memory cycle; the Z80 samples it at the falling edge of T3.
 // It is stable for more than one clk21m before being used. (Written in
 // cycles of the capturing clock: "-start" is not applied by Gowin towards
 // the generated cpuclk; one more cpuclk is looser than the real ~80 ns

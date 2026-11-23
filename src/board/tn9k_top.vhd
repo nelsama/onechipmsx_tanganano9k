@@ -14,8 +14,8 @@
 --             vdp2hdmi.vhd): one VDP VGA line = 684 x clk21m = 855 x 27 MHz.
 --
 -- Reset: power-on, S1 (pin 4), the external button on pin 86 and "PSRAM
--- not ready" hold the MSX in reset. Every reset first clears the mapper RAM
--- and the MegaRAM (~0.1 s), like the original SD-RAM sequencer: MSX-DOS 2
+-- not ready" hold the MSX in reset. Every reset clears the mapper RAM,
+-- power-on also the MegaRAM (~0.1 s): MSX-DOS 2
 -- does not boot again over the RAM of the previous session.
 -- S1 does not reset the PSRAM (it keeps its configuration).
 --

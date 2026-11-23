@@ -73,9 +73,10 @@ entity psram_msx is
     cpu_dbi     : out   std_logic_vector(7 downto 0);
     cpu_ack     : out   std_logic;
 
-    -- RAM clear (die 1, mapper 0x000000-0x0FFFFF and MegaRAM 0x200000-
-    -- 0x27FFFF): started by a rising edge of clr_req, clr_busy = '1' until
-    -- done (~0.1 s). The CPU port must be idle meanwhile (MSX in reset).
+    -- RAM clear (die 1), started by a rising edge of clr_req, clr_busy = '1'
+    -- until done (~0.1 s): the mapper (0x000000-0x0FFFFF) always, the MegaRAM
+    -- (0x200000-0x27FFFF) only the first time after power-on, so a loaded
+    -- cartridge survives a reset. The CPU port must be idle (MSX in reset).
     clr_req     : in    std_logic := '0';
     clr_busy    : out   std_logic;
 
@@ -118,6 +119,7 @@ architecture rtl of psram_msx is
   signal clr_req_r, clr_req_d, clr_act : std_logic := '0';
   signal clr_adr        : unsigned(21 downto 0) := (others => '0');
   signal clr_nxt        : unsigned(21 downto 0) := (others => '0');
+  signal clr_first      : std_logic := '1';   -- first clear since power-on
   signal clr_endmap, clr_endall : std_logic := '0';
   signal ack_i          : std_logic := '0';
   signal dbi_i          : std_logic_vector(7 downto 0) := (others => '1');
@@ -255,10 +257,11 @@ begin
         when C_DONE =>
           if clr_act = '1' then
             -- next word: mapper 1 MB, then MegaRAM 512 KB
-            if clr_endmap = '1' then
+            if clr_endmap = '1' and clr_first = '1' then
               clr_adr <= to_unsigned(16#200000#, 22);
-            elsif clr_endall = '1' then
+            elsif clr_endmap = '1' or clr_endall = '1' then
               clr_act <= '0';
+              clr_first <= '0';
             else
               clr_adr <= clr_nxt;
             end if;
@@ -282,6 +285,7 @@ begin
         cpu_st <= C_IDLE;
         ack_i <= '0';
         clr_act <= '0';
+        clr_first <= '1';
       end if;
     end if;
   end process;

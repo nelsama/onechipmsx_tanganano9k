@@ -25,6 +25,7 @@ entity tb_sys is
     SIMTIME_MS : integer := 20;
     FASTBOOT   : integer := 0;     -- 1: image preloaded in the PSRAM model
                                    -- (use with sim/iplrom_fastboot.vhd)
+    PCTIME     : integer := 0;     -- report the period of this opcode address
     CLEARTEST  : integer := 0      -- 1: only test the RAM clear of psram_msx
   );
 end entity;
@@ -236,6 +237,24 @@ begin
         end if;
       end if;
       req_d := dbus(6);
+    end if;
+  end process;
+
+  -- HR test: time between opcode fetches of the first loop instruction
+  process(clk21m)
+    variable l : line;
+    variable p, n : integer := 0;
+    variable t0 : time := 0 ns;
+  begin
+    if rising_edge(clk21m) and PCTIME /= 0 then
+      if to_integer(unsigned(dbg(31 downto 16))) = PCTIME and p /= PCTIME then
+        n := n + 1;
+        if n > 1 and n < 60 then
+          write(l, string'("LOOP ") & integer'image((now - t0) / T21) & " clk21m (T x6)"); writeline(output, l);
+        end if;
+        t0 := now;
+      end if;
+      p := to_integer(unsigned(dbg(31 downto 16)));
     end if;
   end process;
 

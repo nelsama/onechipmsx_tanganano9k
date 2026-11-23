@@ -729,11 +729,6 @@ begin
         BusWait_n <= '0';
       elsif (SdPaus = '1') then
         BusWait_n <= '0';
-      elsif (RamReq = '1' and RamAck = '0') then
-        -- TN9K: the PSRAM answers in ~250-350 ns, close to the ~417 ns a
-        -- Z80 memory read allows: wait until the data is there (the
-        -- original SD-RAM slots were fast enough to need no wait)
-        BusWait_n <= '0';
       else
         BusWait_n <= '1';
       end if;
