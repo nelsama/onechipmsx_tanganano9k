@@ -35,6 +35,7 @@ entity tb_vdp is
     LAT      : integer := 0;
     FRAMES   : integer := 3;
     CMDTEST  : integer := 0;
+    LINETEST : integer := 0;   -- 1: line interrupts (R19) changing R23 / R18 mid-screen
     USE_PSRAM: integer := 0;
     RATIO    : integer := 4;
     LC       : integer := 3;
@@ -321,6 +322,7 @@ begin
     variable v      : std_logic_vector(7 downto 0);
     variable st     : std_logic_vector(7 downto 0);
     variable errors : integer := 0;
+    variable lt_n   : integer := 0;
     variable l      : line;
   begin
     reset <= '1';
@@ -434,7 +436,32 @@ begin
       write(l, string'("VDP commands done")); writeline(output, l);
     end if;
 
+    if LINETEST = 1 then
+      wreg(0, r0 + 16#10#);               -- IE1
+      wreg(19, 60);
+    end if;
     setup_done <= true;
+    if LINETEST = 1 then
+      wreg(15, 1);
+      lt_n := 0;
+      loop
+        wait until falling_edge(clk21m);
+        exit when sim_done;
+        if int_n = '0' then
+          io_rd(16#99#, st);              -- S#1: acknowledges the line interrupt
+          lt_n := lt_n + 1;
+          if lt_n <= 12 then
+            write(l, string'("LINEINT ")); write(l, lt_n); write(l, string'(" S1="));
+            write(l, hex(st)); write(l, string'(" t=")); write(l, now); writeline(output, l);
+          end if;
+          if lt_n mod 2 = 1 then
+            wreg(23, 40); wreg(18, 16#33#); wreg(19, 180);
+          else
+            wreg(23, 0);  wreg(18, 16#00#); wreg(19, 60);
+          end if;
+        end if;
+      end loop;
+    end if;
     wait;
   end process;
 
