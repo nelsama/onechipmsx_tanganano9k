@@ -61,8 +61,10 @@ use ieee.numeric_std.all;
 entity tn9k_top is
   generic (
     RATIO : integer := 4;         -- memclk / clk21m: 4 or 5
-    DBG_TRACE : boolean := false  -- opcode-fetch trace on the UART (needs room:
+    DBG_TRACE : boolean := false; -- opcode-fetch trace on the UART (needs room:
                                   -- build without OPLL, ENABLE_OPLL=false)
+    UART_REPORT : boolean := false  -- short status report on the UART TX
+                                    -- (off by default: the FPGA is ~97 % full)
   );
   port (
     clk27       : in    std_logic;
@@ -109,6 +111,7 @@ entity tn9k_top is
     -- debug UART, 115200 8N1 (17 = on-board USB-UART, 32 = external)
     uart_tx     : out   std_logic;
     uart_tx2    : out   std_logic;
+    uart_rx     : in    std_logic;    -- 18 = on-board USB-UART: MSX keyboard
 
     -- embedded PSRAM (fixed names, no .cst entries)
     O_psram_ck      : out   std_logic_vector(1 downto 0);
@@ -200,6 +203,10 @@ architecture rtl of tn9k_top is
   signal ack_d    : std_logic := '0';
   signal ack_r    : std_logic := '0';
   signal utx      : std_logic;
+  -- UART keyboard
+  signal kb_valid, kb_shift, kb_ctrl : std_logic;
+  signal kb_row   : std_logic_vector(3 downto 0);
+  signal kb_col   : std_logic_vector(2 downto 0);
   signal audio  : std_logic;
   -- joystick: bit 0 up, 1 down, 2 left, 3 right, 4 trigger A, 5 trigger B
   signal joy_s1, joy_s2 : std_logic_vector(6 downto 0) := (others => '1');
@@ -381,7 +388,11 @@ begin
   end generate;
 
   -- short report (release) / full report with the boot diagnostics (debug)
-  g_uart_rel : if not DBG_TRACE generate
+  g_uart_none : if not DBG_TRACE and not UART_REPORT generate
+    utx <= '1';
+  end generate;
+
+  g_uart_rel : if not DBG_TRACE and UART_REPORT generate
   u_uart : entity work.uart_report
     generic map (
       TPL => "MSX PC=#### SL=## VW=## F=# RC=####" & CR & LF,
@@ -410,6 +421,13 @@ begin
 
   uart_tx  <= utx;
   uart_tx2 <= utx;
+
+  -- MSX keyboard over the UART (typed in a terminal on the PC)
+  u_kbd : entity work.uart_kbd
+    generic map (CLKS_PER_BIT => 188)
+    port map (clk => clk21m, rx => uart_rx, key_valid => kb_valid,
+              key_row => kb_row, key_col => kb_col,
+              key_shift => kb_shift, key_ctrl => kb_ctrl);
 
   -- joystick / buttons synchronised to clk21m
   process(clk21m)
@@ -448,6 +466,11 @@ begin
       pJoyB     => (others => '1'),
       pStrB     => open,
       pKeySpace_n => joy_s2(6),
+      pKeyInj     => kb_valid,
+      pKeyInjRow  => kb_row,
+      pKeyInjCol  => kb_col,
+      pKeyInjShift=> kb_shift,
+      pKeyInjCtrl => kb_ctrl,
       pSd_Ck    => sd_sck,
       pSd_Cm    => sd_cmd,
       pSd_Cs    => sd_cs,

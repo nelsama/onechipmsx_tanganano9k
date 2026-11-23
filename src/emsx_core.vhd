@@ -79,6 +79,12 @@ entity emsx_core is
     pStrB       : out std_logic;
     -- TN9K: extra button pressed = SPACE key ('0' = pressed)
     pKeySpace_n : in  std_logic;
+    -- TN9K: injected key (UART keyboard): matrix row / column, + SHIFT, CTRL
+    pKeyInj     : in  std_logic;                        -- '1' = pressed
+    pKeyInjRow  : in  std_logic_vector(3 downto 0);
+    pKeyInjCol  : in  std_logic_vector(2 downto 0);
+    pKeyInjShift: in  std_logic;
+    pKeyInjCtrl : in  std_logic;
 
     -- SD card (SPI mode)
     pSd_Ck      : out std_logic;                        -- CLK
@@ -1328,9 +1334,26 @@ begin
     port map (clk21m, reset, clkena, Kmap, Caps, Kana, Paus, open, Reso, Fkeys,
               pPs2Clk, pPs2Dat, PpiPortC, KbdKeyX);
 
-  -- TN9K: the extra button acts as SPACE (row 8, bit 0, active low)
-  PpiPortB <= KbdKeyX(7 downto 1) & (KbdKeyX(0) and pKeySpace_n)
-                when PpiPortC(3 downto 0) = "1000" else KbdKeyX;
+  -- TN9K: the extra button acts as SPACE (row 8, bit 0, active low) and the
+  -- UART keyboard presses one key (+ SHIFT / CTRL in row 6)
+  process(KbdKeyX, PpiPortC, pKeySpace_n, pKeyInj, pKeyInjRow, pKeyInjCol, pKeyInjShift, pKeyInjCtrl)
+    variable k : std_logic_vector(7 downto 0);
+  begin
+    k := KbdKeyX;
+    if PpiPortC(3 downto 0) = "1000" and pKeySpace_n = '0' then
+      k(0) := '0';
+    end if;
+    if pKeyInj = '1' then
+      if PpiPortC(3 downto 0) = pKeyInjRow then
+        k(conv_integer(pKeyInjCol)) := '0';
+      end if;
+      if PpiPortC(3 downto 0) = "0110" then
+        if pKeyInjShift = '1' then k(0) := '0'; end if;
+        if pKeyInjCtrl  = '1' then k(1) := '0'; end if;
+      end if;
+    end if;
+    PpiPortB <= k;
+  end process;
 
   G_RTC : if ENABLE_RTC generate
     U07 : rtc
