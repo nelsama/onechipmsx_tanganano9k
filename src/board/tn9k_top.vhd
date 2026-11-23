@@ -13,7 +13,8 @@
 --             27 MHz pixel clock. 720x480p raster locked to the VDP (see
 --             vdp2hdmi.vhd): one VDP VGA line = 684 x clk21m = 855 x 27 MHz.
 --
--- Reset: power-on, S1 (pin 4) and "PSRAM not ready" hold the MSX in reset.
+-- Reset: power-on, S1 (pin 4), the external button on pin 86 and "PSRAM
+-- not ready" hold the MSX in reset.
 -- S1 does not reset the PSRAM (it keeps its configuration).
 --
 -- Joystick: pins of the pengo_arcade board (up 30, down 33, left 34,
@@ -67,6 +68,7 @@ entity tn9k_top is
     clk27       : in    std_logic;
     btn_s1_n    : in    std_logic;
     btn_s2_n    : in    std_logic;
+    btn_rst_n   : in    std_logic;    -- external reset button (pin 86), like S1
     led_n       : out   std_logic_vector(5 downto 0);
 
     -- HDMI
@@ -243,7 +245,7 @@ begin
   process(clk21m)
   begin
     if rising_edge(clk21m) then
-      s1_sync <= s1_sync(1 downto 0) & btn_s1_n;
+      s1_sync <= s1_sync(1 downto 0) & (btn_s1_n and btn_rst_n);
       if sys_lock = '0' or ps_ready = '0' or s1_sync(2) = '0' then
         por_cnt <= (others => '0');
         msx_rst_n <= '0';

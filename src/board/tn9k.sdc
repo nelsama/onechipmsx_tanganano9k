@@ -28,7 +28,7 @@ create_clock -name clk_pix  -period 37.037 -waveform {0 18.518}    [get_nets {cl
 set_clock_groups -asynchronous -group [get_clocks {clk27}] -group [get_clocks {memclk memclk_p clk21m cpuclk}] -group [get_clocks {clk135 clk_pix}]
 
 // asynchronous inputs (sampled / synchronised)
-set_false_path -from [get_ports {btn_s1_n btn_s2_n sd_dat0 flash_miso ps2_clk ps2_dat}]
+set_false_path -from [get_ports {btn_s1_n btn_s2_n btn_rst_n sd_dat0 flash_miso ps2_clk ps2_dat}]
 set_false_path -from [get_ports {joy_up joy_down joy_left joy_right joy_fire joy_btn2 joy_btn3}]
 
 // psram_msx hands the VRAM read word to the VDP (dbi0) only on the memclk
