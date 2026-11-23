@@ -14,7 +14,9 @@
 --             vdp2hdmi.vhd): one VDP VGA line = 684 x clk21m = 855 x 27 MHz.
 --
 -- Reset: power-on, S1 (pin 4), the external button on pin 86 and "PSRAM
--- not ready" hold the MSX in reset.
+-- not ready" hold the MSX in reset. Every reset first clears the mapper RAM
+-- and the MegaRAM (~0.1 s), like the original SD-RAM sequencer: MSX-DOS 2
+-- does not boot again over the RAM of the previous session.
 -- S1 does not reset the PSRAM (it keeps its configuration).
 --
 -- Joystick: pins of the pengo_arcade board (up 30, down 33, left 34,
@@ -156,6 +158,8 @@ architecture rtl of tn9k_top is
   signal msx_rst_n  : std_logic := '0';
   signal ps_ready   : std_logic;
   signal ps_overrun : std_logic;
+  signal clr_req, clr_seen, clr_busy_d : std_logic := '0';
+  signal clr_busy   : std_logic;
   signal pix_rst_sr : std_logic_vector(3 downto 0) := (others => '1');
   signal pix_rst    : std_logic;
 
@@ -253,8 +257,17 @@ begin
   begin
     if rising_edge(clk21m) then
       s1_sync <= s1_sync(1 downto 0) & (btn_s1_n and btn_rst_n);
+      clr_busy_d <= clr_busy;
       if sys_lock = '0' or ps_ready = '0' or s1_sync(2) = '0' then
         por_cnt <= (others => '0');
+        msx_rst_n <= '0';
+        clr_req <= '0';
+        clr_seen <= '0';
+      elsif clr_req = '0' then                -- clear the RAM first, like the
+        clr_req <= '1';                       -- original SD-RAM sequencer did
+        msx_rst_n <= '0';
+      elsif clr_seen = '0' or clr_busy_d = '1' then
+        if clr_busy_d = '1' then clr_seen <= '1'; end if;
         msx_rst_n <= '0';
       elsif por_cnt /= x"FFFF" then          -- ~3 ms
         por_cnt <= por_cnt + 1;
@@ -498,6 +511,7 @@ begin
       vdp_dbo => vram_dbo, vdp_dbi => vram_dbi, vdp_overrun => ps_overrun,
       cpu_req => ram_req, cpu_wr => ram_wr, cpu_adr => ram_adr,
       cpu_dbo => ram_dbo, cpu_dbi => ram_dbi, cpu_ack => ram_ack,
+      clr_req => clr_req, clr_busy => clr_busy,
       O_psram_ck => O_psram_ck, O_psram_ck_n => O_psram_ck_n,
       IO_psram_rwds => IO_psram_rwds, IO_psram_dq => IO_psram_dq,
       O_psram_reset_n => O_psram_reset_n, O_psram_cs_n => O_psram_cs_n);

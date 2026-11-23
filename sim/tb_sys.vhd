@@ -23,8 +23,9 @@ entity tb_sys is
     IMAGE   : string := "OCM-BIOS.DAT";
     WRITES  : integer := 16;
     SIMTIME_MS : integer := 20;
-    FASTBOOT   : integer := 0      -- 1: image preloaded in the PSRAM model
+    FASTBOOT   : integer := 0;     -- 1: image preloaded in the PSRAM model
                                    -- (use with sim/iplrom_fastboot.vhd)
+    CLEARTEST  : integer := 0      -- 1: only test the RAM clear of psram_msx
   );
 end entity;
 
@@ -45,6 +46,8 @@ architecture sim of tb_sys is
   signal ram_adr   : std_logic_vector(21 downto 0);
   signal ram_dbo, ram_dbi : std_logic_vector(7 downto 0);
   signal overrun   : std_logic;
+  signal clr_req, clr_busy : std_logic := '0';
+  signal done_clr : boolean := false;
 
   signal fl_cs, fl_ck, fl_di, fl_do : std_logic := '1';
   signal sd_ck, sd_cm, sd_cs : std_logic;
@@ -69,8 +72,8 @@ architecture sim of tb_sys is
     return r;
   end function;
 begin
-  clk21m <= not clk21m after T21 / 2 when not done else '0';
-  memclk <= not memclk after TMEM / 2 when not done else '0';
+  clk21m <= not clk21m after T21 / 2 when not done and not done_clr else '0';
+  memclk <= not memclk after TMEM / 2 when not done and not done_clr else '0';
 
   u_core : entity work.emsx_core
     port map (
@@ -81,7 +84,8 @@ begin
       pRamDbo => ram_dbo, pRamDbi => ram_dbi, pRamAck => ram_ack,
       pPs2Clk => ps2c, pPs2Dat => ps2d,
       pJoyA => (others => '1'), pStrA => open, pJoyB => (others => '1'), pStrB => open,
-      pKeySpace_n => '1',
+      pKeySpace_n => '1', pKeyInj => '0', pKeyInjRow => (others => '0'), pKeyInjCol => (others => '0'),
+      pKeyInjShift => '0', pKeyInjCtrl => '0',
       pSd_Ck => sd_ck, pSd_Cm => sd_cm, pSd_Cs => sd_cs, pSd_Do => '1',
       pEpc_Ck => fl_ck, pEpc_Cs => fl_cs, pEpc_Di => fl_di, pEpc_Do => fl_do,
       pLedSd => led, pVideoR => vr, pVideoG => vg, pVideoB => vb,
@@ -95,14 +99,46 @@ begin
       vdp_dbo => vram_dbo, vdp_dbi => vram_dbi, vdp_overrun => overrun,
       cpu_req => ram_req, cpu_wr => ram_wr, cpu_adr => ram_adr,
       cpu_dbo => ram_dbo, cpu_dbi => ram_dbi, cpu_ack => ram_ack,
+      clr_req => clr_req, clr_busy => clr_busy,
       O_psram_ck => ps_ck, O_psram_ck_n => ps_ckn, IO_psram_rwds => ps_rwds,
       IO_psram_dq => ps_dq, O_psram_reset_n => ps_rstn, O_psram_cs_n => ps_csn);
 
   -- reset: released 20 clk21m after the PSRAM is ready
   process
+    variable l : line;
+    variable bad : integer := 0;
+    variable v : std_logic_vector(15 downto 0);
   begin
     reset_n <= '0';
     wait until ready = '1';
+    if CLEARTEST = 1 then
+      -- fill a few words of every area with a pattern, clear, check
+      for i in 0 to 15 loop
+        psram_write(1, 16#000000# / 2 + i * 4099, x"A55A");    -- mapper
+        psram_write(1, 16#0FFFFE# / 2 - i, x"A55A");
+        psram_write(1, 16#200000# / 2 + i * 1021, x"A55A");    -- MegaRAM
+        psram_write(1, 16#27FFFE# / 2 - i, x"A55A");
+        psram_write(1, 16#280000# / 2 + i, x"1234");           -- ESE-RAM: kept
+        psram_write(1, 16#100000# / 2 + i, x"1234");           -- unused: kept
+      end loop;
+      wait until rising_edge(clk21m);
+      clr_req <= '1';
+      wait until clr_busy = '1';
+      write(l, time'image(now) & "  clear started"); writeline(output, l);
+      wait until clr_busy = '0';
+      write(l, time'image(now) & "  clear done"); writeline(output, l);
+      for i in 0 to 15 loop
+        if psram_read(1, 16#000000# / 2 + i * 4099) /= x"0000" then bad := bad + 1; end if;
+        if psram_read(1, 16#0FFFFE# / 2 - i) /= x"0000" then bad := bad + 1; end if;
+        if psram_read(1, 16#200000# / 2 + i * 1021) /= x"0000" then bad := bad + 1; end if;
+        if psram_read(1, 16#27FFFE# / 2 - i) /= x"0000" then bad := bad + 1; end if;
+        if psram_read(1, 16#280000# / 2 + i) /= x"1234" then bad := bad + 1; end if;
+        if psram_read(1, 16#100000# / 2 + i) /= x"1234" then bad := bad + 1; end if;
+      end loop;
+      write(l, string'("RAM clear check errors: ") & integer'image(bad)); writeline(output, l);
+      done_clr <= true;
+      wait;
+    end if;
     for i in 1 to 20 loop wait until rising_edge(clk21m); end loop;
     reset_n <= '1';
     wait;

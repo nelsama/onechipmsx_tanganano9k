@@ -10,6 +10,7 @@
         <File path="src/board/hdmi/hdmi_module.vhd" type="file.vhdl" enable="1"/>
         <File path="src/board/hdmi/tmds_encoder_2.vhd" type="file.vhdl" enable="1"/>
         <File path="src/board/tn9k_top.vhd" type="file.vhdl" enable="1"/>
+        <File path="src/board/uart_kbd.vhd" type="file.vhdl" enable="1"/>
         <File path="src/board/vdp2hdmi.vhd" type="file.vhdl" enable="1"/>
         <File path="src/cpu/T80.vhd" type="file.vhdl" enable="1"/>
         <File path="src/cpu/T80_ALU.vhd" type="file.vhdl" enable="1"/>

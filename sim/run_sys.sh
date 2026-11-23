@@ -31,4 +31,4 @@ FILES=$(cd "$ROOT" && find src -name '*.vhd' ! -path 'src/board/*' ! -path 'src/
 rm -f work-obj93.cf
 ghdl -i $F $FILES $EXTRA "$ROOT/sim/psram_chan_model.vhd" "$ROOT/sim/tb_sys.vhd"
 ghdl -m $F tb_sys 2>&1 | grep -v -i "warning" | grep -v "^analyze\|^elaborate\|^ *\^\|F : std\|extra_mode" || true
-ghdl -r $F tb_sys -gIMAGE="$IMG" -gSIMTIME_MS=$SIMTIME -gFASTBOOT=$FASTBOOT --ieee-asserts=disable 2>&1 | grep -v -i warning
+ghdl -r $F tb_sys -gIMAGE="$IMG" -gSIMTIME_MS=$SIMTIME -gFASTBOOT=$FASTBOOT -gCLEARTEST=${CLEARTEST:-0} --ieee-asserts=disable 2>&1 | grep -v -i warning

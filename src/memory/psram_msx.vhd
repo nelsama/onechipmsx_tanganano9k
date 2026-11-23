@@ -43,6 +43,7 @@
 --
 library ieee;
 use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
 
 entity psram_msx is
   generic (
@@ -71,6 +72,12 @@ entity psram_msx is
     cpu_dbo     : in    std_logic_vector(7 downto 0);
     cpu_dbi     : out   std_logic_vector(7 downto 0);
     cpu_ack     : out   std_logic;
+
+    -- RAM clear (die 1, mapper 0x000000-0x0FFFFF and MegaRAM 0x200000-
+    -- 0x27FFFF): started by a rising edge of clr_req, clr_busy = '1' until
+    -- done (~0.1 s). The CPU port must be idle meanwhile (MSX in reset).
+    clr_req     : in    std_logic := '0';
+    clr_busy    : out   std_logic;
 
     -- PSRAM pins
     O_psram_ck      : out   std_logic_vector(1 downto 0);
@@ -107,6 +114,11 @@ architecture rtl of psram_msx is
   signal cpu_req_r, cpu_wr_r : std_logic := '0';
   signal cpu_adr_r      : std_logic_vector(21 downto 0) := (others => '0');
   signal cpu_dbo_r      : std_logic_vector(7 downto 0) := (others => '0');
+  signal bw1            : std_logic := '1';
+  signal clr_req_r, clr_req_d, clr_act : std_logic := '0';
+  signal clr_adr        : unsigned(21 downto 0) := (others => '0');
+  signal clr_nxt        : unsigned(21 downto 0) := (others => '0');
+  signal clr_endmap, clr_endall : std_logic := '0';
   signal ack_i          : std_logic := '0';
   signal dbi_i          : std_logic_vector(7 downto 0) := (others => '1');
 
@@ -120,6 +132,7 @@ begin
   vdp_overrun <= overrun;
   cpu_dbi     <= dbi_i;
   cpu_ack     <= ack_i;
+  clr_busy    <= clr_act;
 
   ----------------------------------------------------------------
   -- VDP port
@@ -198,9 +211,25 @@ begin
       cpu_wr_r  <= cpu_wr;
       cpu_adr_r <= cpu_adr;
       cpu_dbo_r <= cpu_dbo;
+      clr_req_r <= clr_req;
+      clr_req_d <= clr_req_r;
+      if clr_req_r = '1' and clr_req_d = '0' then
+        clr_act <= '1';
+        clr_adr <= (others => '0');
+      end if;
       case cpu_st is
         when C_IDLE =>
-          if cpu_req_r = '1' and ack_i = '0' and ready_i = '1' and busy1 = '0' then
+          if clr_act = '1' then
+            if ready_i = '1' and busy1 = '0' then
+              adr1 <= std_logic_vector(clr_adr);
+              din1 <= (others => '0');
+              bw1  <= '0';                    -- whole word
+              cpu_rd <= '0';
+              wr1  <= '1';
+              cpu_st <= C_ISSUE;
+            end if;
+          elsif cpu_req_r = '1' and ack_i = '0' and ready_i = '1' and busy1 = '0' then
+            bw1  <= '1';
             adr1 <= cpu_adr_r;
             din1 <= cpu_dbo_r & cpu_dbo_r;
             cpu_rd <= not cpu_wr_r;
@@ -213,11 +242,28 @@ begin
           end if;
         when C_ISSUE =>               -- channel accepted at this edge
           cpu_st <= C_BUSY;
+          -- RAM clear: next address and end tests, ready long before C_DONE
+          clr_nxt <= clr_adr + 2;
+          clr_endmap <= '0';
+          clr_endall <= '0';
+          if clr_adr = to_unsigned(16#0FFFFE#, 22) then clr_endmap <= '1'; end if;
+          if clr_adr = to_unsigned(16#27FFFE#, 22) then clr_endall <= '1'; end if;
         when C_BUSY =>
           if busy1 = '0' then
             cpu_st <= C_DONE;
           end if;
         when C_DONE =>
+          if clr_act = '1' then
+            -- next word: mapper 1 MB, then MegaRAM 512 KB
+            if clr_endmap = '1' then
+              clr_adr <= to_unsigned(16#200000#, 22);
+            elsif clr_endall = '1' then
+              clr_act <= '0';
+            else
+              clr_adr <= clr_nxt;
+            end if;
+            cpu_st <= C_IDLE;
+          else
           if cpu_rd = '1' then
             if adr1(0) = '0' then
               dbi_i <= dout1(7 downto 0);
@@ -227,6 +273,7 @@ begin
           end if;
           ack_i <= '1';
           cpu_st <= C_IDLE;
+          end if;
       end case;
       if cpu_req = '0' then
         ack_i <= '0';
@@ -234,6 +281,7 @@ begin
       if resetn = '0' then
         cpu_st <= C_IDLE;
         ack_i <= '0';
+        clr_act <= '0';
       end if;
     end if;
   end process;
@@ -254,7 +302,7 @@ begin
     generic map (FREQ => FREQ, LATENCY => LATENCY, FIXED => true, DIE => 1)
     port map (
       clk => clk, clk_p => clk_p, resetn => resetn,
-      read => rd1, write => wr1, addr => adr1, din => din1, byte_write => '1',
+      read => rd1, write => wr1, addr => adr1, din => din1, byte_write => bw1,
       dout => dout1, busy => busy1,
       psram_ck => O_psram_ck(1), psram_cs_n => O_psram_cs_n(1),
       psram_rwds => IO_psram_rwds(1), psram_dq => IO_psram_dq(15 downto 8));
