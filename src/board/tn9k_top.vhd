@@ -53,8 +53,8 @@
 --     BW  first CPU write into the image area after the BIOS started:
 --         valid, die address (19:0), data, PC
 --     T   trace: index ii and entry (PC pppp, slot register ss) of the last
---         256 opcode-fetch addresses, frozen (Z=1) the first time the CPU
---         reaches 0038h after entering the BIOS; one entry per line
+--         256 opcode-fetch addresses, frozen (Z=1) by the S2 button;
+--         one entry per line
 --
 library ieee;
 use ieee.std_logic_1164.all;
@@ -201,6 +201,7 @@ architecture rtl of tn9k_top is
   signal tr_r     : unsigned(7 downto 0) := (others => '0');
   signal tr_q     : std_logic_vector(23 downto 0) := (others => '0');
   signal tr_frz   : std_logic := '0';
+  signal s2_s     : std_logic_vector(1 downto 0) := (others => '1');
   signal pc_d     : std_logic_vector(15 downto 0) := (others => '0');
   signal rep_d    : std_logic := '0';
   signal rep_cnt  : unsigned(19 downto 0) := (others => '0');
@@ -375,7 +376,7 @@ begin
   end process;
 
   -- trace of the opcode-fetch addresses (a new entry when the M1 address
-  -- changes), frozen at the first 0038h after the main BIOS was read
+  -- changes), frozen by the S2 button
   g_trace : if DBG_TRACE generate
   process(clk21m)
   begin
@@ -386,9 +387,11 @@ begin
       elsif tr_frz = '0' and dbg(31 downto 16) /= pc_d then
         tr(to_integer(tr_w)) <= dbg(31 downto 16) & dbg(15 downto 8);
         tr_w <= tr_w + 1;
-        if dbg(31 downto 16) = x"0038" and dg_main = '1' then
-          tr_frz <= '1';
-        end if;
+      end if;
+      -- S2 pressed: freeze (and keep) the trace; released by the MSX reset
+      s2_s <= s2_s(0) & btn_s2_n;
+      if msx_rst_n = '1' and s2_s(1) = '0' then
+        tr_frz <= '1';
       end if;
       -- read one entry per report (the reporter snaps at rep_cnt = 0)
       rep_cnt <= rep_cnt + 1;

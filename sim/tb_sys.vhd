@@ -251,6 +251,11 @@ begin
     if rising_edge(clk21m) then
       if ram_ack = '1' and ack_d = '0' and ram_wr = '1' and ram_req = '1' then
         a := to_integer(unsigned(ram_adr));
+        -- self tests report in RAM C000h-C00Fh (sim/mk_megaram_test.py)
+        if a < 16#100000# and a mod 16384 < 16 and dbus(32 downto 21) = x"C00" and dbus(5 downto 4) = "11"
+           and dbg(31 downto 28) = "0000" then
+          write(l, string'("RESULT ") & hex(dbus(32 downto 17)) & " = " & hex(ram_dbo)); writeline(output, l);
+        end if;
         if a >= 16#280000# and a < 16#2C0000# then
           if nw < WRITES or (a - 16#280000#) mod 16384 < 2 then
             write(l, time'image(now) & "  W " & hex(ram_adr) & " = " & hex(ram_dbo)
