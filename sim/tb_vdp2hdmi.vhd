@@ -62,7 +62,7 @@ begin
 
   dut : entity work.vdp2hdmi
     port map (clk21m, r, g, b, hs_n, vs_n, clk_pix, '0',
-              hr, hg, hb, hhs, hvs, hde, locked);
+              hr, hg, hb, hhs, hvs, hde, open, open, locked);
 
   -- stimulus: the dump, looped
   process

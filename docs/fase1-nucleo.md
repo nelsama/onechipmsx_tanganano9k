@@ -26,6 +26,8 @@
 - `text12`: el generador de parpadeo de TEXT2 estaba fuera del flanco de reloj (latches + lazo
   combinacional) y `blinkPeriodCount` nunca se incrementaba.
 - `eseps2`: `Fkeys` y `Scro` generaban latches.
+- `VoiceRom` (OPLL, corregido el 2026-11-25): la tabla estaba declarada `37 downto 0` (arreglo para XST)
+  y los instrumentos quedaban en orden inverso; ahora `0 to 37`, como el OCM original.
 - Resultado: **0 latches** en el netlist.
 
 ## Recursos (GW1NR-9, `tools/synth.sh`)

@@ -45,6 +45,9 @@ entity vdp2hdmi is
     hdmi_hs  : out std_logic;     -- sync levels for the TMDS control symbols
     hdmi_vs  : out std_logic;     -- (480p: negative polarity, '0' = pulse)
     hdmi_de  : out std_logic;
+    -- raster position, 2 clocks ahead of the outputs above (for hdmi_tx)
+    h_cnt    : out unsigned(9 downto 0);
+    v_cnt    : out unsigned(9 downto 0);
     locked   : out std_logic      -- '1' when the last VS needed no reload
   );
 end entity;
@@ -200,7 +203,9 @@ begin
       q <= buf(rd_adr);
       vis2 <= vis1; de2 <= de1; hs2 <= hs1; vs2 <= vs1;
 
-      -- output
+      -- output (3 clocks after hcnt / vcnt)
+      h_cnt <= to_unsigned(hcnt, 10);
+      v_cnt <= to_unsigned(vcnt, 10);
       hdmi_de <= de2;
       hdmi_hs <= hs2;
       hdmi_vs <= vs2;

@@ -90,7 +90,7 @@ begin
       pSd_Ck => sd_ck, pSd_Cm => sd_cm, pSd_Cs => sd_cs, pSd_Do => '1',
       pEpc_Ck => fl_ck, pEpc_Cs => fl_cs, pEpc_Di => fl_di, pEpc_Do => fl_do,
       pLedSd => led, pVideoR => vr, pVideoG => vg, pVideoB => vb,
-      pVideoHS_n => hs, pVideoVS_n => vs, pAudio => aud, pDbg => dbg, pDbgBus => dbus);
+      pVideoHS_n => hs, pVideoVS_n => vs, pAudio => aud, pAudioPcm => open, pDbg => dbg, pDbgBus => dbus);
 
   u_mem : entity work.psram_msx
     generic map (FREQ => 86400000, LATENCY => 3, RATIO => 4)

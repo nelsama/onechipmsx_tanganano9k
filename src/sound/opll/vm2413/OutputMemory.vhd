@@ -48,37 +48,29 @@ end OutputMemory;
 architecture RTL of OutputMemory is
 
   type SIGNED_LI_ARRAY_TYPE is array (0 to MAXSLOT) of SIGNED_LI_VECTOR_TYPE;
-  signal data_array : SIGNED_LI_ARRAY_TYPE;
+  signal data_array : SIGNED_LI_ARRAY_TYPE := (others => (others => '0'));
   -- TN9K: synchronous read -> block RAM (saves LUT-RAM on the GW1NR-9)
   attribute syn_ramstyle : string;
   attribute syn_ramstyle of data_array : signal is "block_ram";
   
 begin
 
-  process(clk, reset)
-  
-    variable init_ch : integer range 0 to MAXSLOT;
+  process (clk)
     
   begin
   
-    if (reset = '1') then 
-         
-      init_ch := 0; 
-               
-    elsif clk'event and clk='1' then
-    
-      if init_ch /= MAXSLOT then
-            
-        data_array(init_ch) <= (others=>'0');
-        init_ch := init_ch + 1;
-              
-      elsif wr='1' then
-            
+    -- TN9K: not cleared on reset (power-on content is 0 and every slot is
+    -- rewritten on each pass); saves logic
+    if clk'event and clk = '1' then
+
+      -- write-through (the GW1NR-9 true dual port RAM has no read-before-
+      -- write); OutputGenerator does not use rdata while writing
+      if wr = '1' then
         data_array(addr) <= CONV_SIGNED_LI_VECTOR(wdata);
-                
+        rdata <= wdata;
+      else
+        rdata <= CONV_SIGNED_LI(data_array(addr));
       end if;
-      
-      rdata <= CONV_SIGNED_LI(data_array(addr));
       rdata2 <= CONV_SIGNED_LI(data_array(addr2));
       
     end if;

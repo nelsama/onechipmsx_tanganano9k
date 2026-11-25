@@ -1,5 +1,5 @@
--- Copied unchanged from pengo_arcade (src/gowin/hdmi/tmds_encoder_2.vhd): DVI/HDMI
--- output for the Tang Nano 9K (TMDS encoders + OSER10 + ELVDS_OBUF).
+-- From pengo_arcade (src/gowin/hdmi/tmds_encoder_2.vhd). Changes: smaller logic
+-- (xnor word derived from the xor one) and an auxiliary symbol input.
 -- author: Furkan Cayci, 2018
 -- description: 8b/10b based tmds encoder
 
@@ -12,6 +12,8 @@ entity tmds_encoder_2 is
         clk  : in  std_logic;
         disp_ena   : in  std_logic;
         control : in  std_logic_vector(1 downto 0);
+        aux_ena : in  std_logic;                      -- send aux (disp_ena = 0)
+        aux   : in  std_logic_vector(9 downto 0);
         d_in  : in  std_logic_vector(7 downto 0);
         q_out : out std_logic_vector(9 downto 0)
     );
@@ -20,7 +22,8 @@ end tmds_encoder_2;
 architecture rtl of tmds_encoder_2 is
     signal n_ones_din : integer range 0 to 8;
 
-    signal xored, xnored : std_logic_vector(8 downto 0);
+    signal sel_xnor : std_logic;
+    signal xored : std_logic_vector(7 downto 0);
     signal q_m : std_logic_vector(8 downto 0);
 
     -- a positive value represents the excess number of 1's that have been transmitted
@@ -50,18 +53,14 @@ begin
     begin
         xored(i) <= d_in(i) xor xored(i - 1);
     end generate;
-    xored(8) <= '1';
 
-    -- create xnor encodings
-    xnored(0) <= d_in(0);
-    encode_xnor: for i in 1 to 7 generate
+    -- xnor encoding = xor encoding with the odd bits inverted
+    sel_xnor <= '1' when n_ones_din > 4 or (n_ones_din = 4 and d_in(0) = '0') else '0';
+    q_m_bits: for i in 0 to 7 generate
     begin
-        xnored(i) <= d_in(i) xnor xnored(i - 1);
+        q_m(i) <= xored(i) xor sel_xnor when i mod 2 = 1 else xored(i);
     end generate;
-    xnored(8) <= '0';
-
-    -- use xnored or xored data based on the ones
-    q_m <= xnored when n_ones_din > 4 or (n_ones_din = 4 and d_in(0) = '0') else xored;
+    q_m(8) <= not sel_xnor;
 
     -- ones counter for internal data
     process(q_m) is
@@ -80,13 +79,17 @@ begin
     begin
         if rising_edge(clk) then
             if disp_ena = '0' then
+                disparity <= (others => '0');
+                if aux_ena = '1' then
+                  q_out <= aux;
+                else
                 case control is
                     when "00"   => q_out <= "1101010100";
                     when "01"   => q_out <= "0010101011";
                     when "10"   => q_out <= "0101010100";
                     when others => q_out <= "1010101011";
                 end case;
-                disparity <= (others => '0');
+                end if;
              else
                 if disparity = 0 or diff = 0 then
                     -- xnored data

@@ -14,7 +14,7 @@
 #
 #   PNR=1     also place & route (+ bitstream) with src/board/tn9k.cst/.sdc,
 #             e.g. TOP=tn9k_top PNR=1 tools/synth.sh tn9k 9k
-#             bitstream: build/<name>/impl/pnr/<top>.fs
+#             bitstream: build/<name>/impl/pnr/<top>.fs (ONECHIP_MSX.fs for tn9k_top)
 #
 # Prints: Logic used/8640 (= LUT + ALU + 6*SSRAM), registers, BSRAM.
 # Per-module breakdown: build/<name>/impl/gwsynthesis/*_syn_rsc.xml
@@ -29,6 +29,8 @@ case "${2:-9k}" in
   *)   echo "unknown device '$2'" >&2; exit 2 ;;
 esac
 TOP=${TOP:-emsx_core}
+# output name: the IDE default (project name) for the board, else the entity
+BASE=$TOP; [ "$TOP" = tn9k_top ] && BASE=ONECHIP_MSX
 TOPGENERICS=${TOPGENERICS:-}
 PNR=${PNR:-0}
 GENERICS=${GENERICS:-}
@@ -70,7 +72,7 @@ fi
   echo "add_file -type vhdl $BTOP"
   echo "set_option -top_module $TOP"
   echo "set_option -vhdl_std vhd1993"
-  echo "set_option -output_base_name $TOP"
+  echo "set_option -output_base_name $BASE"
   if [ "$PNR" = 1 ]; then
     echo "add_file -type cst $WIN_ROOT/${CST:-src/board/tn9k.cst}"
     echo "add_file -type sdc $WIN_ROOT/${SDC:-src/board/tn9k.sdc}"
@@ -90,7 +92,7 @@ set +e
 rc=$?
 set -e
 grep -E '^ERROR' syn.out || true
-RPT="impl/gwsynthesis/${TOP}_syn.rpt.html"
+RPT="impl/gwsynthesis/${BASE}_syn.rpt.html"
 if [ -f "$RPT" ]; then
   sed -e 's/<[^>]*>/\n/g' "$RPT" | sed 's/&nbsp//g' | grep -v '^\s*$' |
     grep -A1 -E '^\s*(Logic|Register|BSRAM)\s*$' | grep '/' | tr -s ' ' |
@@ -98,9 +100,9 @@ if [ -f "$RPT" ]; then
 fi
 echo "warnings: $(grep -c '^WARN' syn.out || true)   exit=$rc   log=$OUT/syn.out"
 if [ "$PNR" = 1 ]; then
-  PR="impl/pnr/${TOP}.rpt.txt"
+  PR="impl/pnr/${BASE}.rpt.txt"
   [ -f "$PR" ] && grep -E '^\s*(Logic|Register|BSRAM|PLL|CLKDIV)' "$PR" | head -8 | sed 's/^/pnr: /'
-  TR="impl/pnr/${TOP}_tr_content.html"
+  TR="impl/pnr/${BASE}_tr_content.html"
   [ -f "$TR" ] && echo "timing report: $OUT/$TR"
   ls impl/pnr/*.fs 2>/dev/null | sed 's/^/bitstream: /'
 fi

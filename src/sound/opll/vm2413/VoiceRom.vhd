@@ -42,8 +42,8 @@ entity VoiceRom is
 end VoiceRom;
 
 architecture RTL of VoiceRom is
-  -- AL fixed for XST
-  type VOICE_ARRAY_TYPE is array (37 downto 0) of VOICE_VECTOR_TYPE;
+  -- TN9K: ascending range (the XST fix, 37 downto 0, reversed the instruments)
+  type VOICE_ARRAY_TYPE is array (0 to 37) of VOICE_VECTOR_TYPE;
   --type VOICE_ARRAY_TYPE is array (VOICE_ID_TYPE'range) of VOICE_VECTOR_TYPE;
   
   constant voices : VOICE_ARRAY_TYPE := (

@@ -21,7 +21,8 @@
 --
 -- Joystick: pins of the pengo_arcade board (up 30, down 33, left 34,
 -- right 40, fire 29) + button 2 (pin 35, trigger B) and button 3 (pin 42,
--- SPACE key). Audio: mono PWM on both L (77) and R (76).
+-- SPACE key). Audio: mono PWM on both L (77) and R (76), and
+-- 48 kHz PCM over HDMI (hdmi_tx).
 --
 -- SPI flash: while the MSX is in reset, a 0xAB "release from deep
 -- power-down" is sent to the flash (the IPL-ROM reads it with 0x03 only),
@@ -63,10 +64,11 @@ use ieee.numeric_std.all;
 entity tn9k_top is
   generic (
     RATIO : integer := 4;         -- memclk / clk21m: 4 or 5
+    HDMI_FULL : boolean := true;  -- false: DVI (picture only, no audio)
     DBG_TRACE : boolean := false; -- opcode-fetch trace on the UART (needs room:
                                   -- build without OPLL, ENABLE_OPLL=false)
     UART_REPORT : boolean := false  -- short status report on the UART TX
-                                    -- (off by default: the FPGA is ~97 % full)
+                                    -- (off by default: the FPGA is ~99 % full)
   );
   port (
     clk27       : in    std_logic;
@@ -177,6 +179,18 @@ architecture rtl of tn9k_top is
   signal vhs_n, vvs_n : std_logic;
   signal hr, hg, hb : std_logic_vector(7 downto 0);
   signal hhs, hvs, hde, hlocked : std_logic;
+  signal hcnt, vcnt : unsigned(9 downto 0);
+  signal hrgb : std_logic_vector(23 downto 0);
+  signal tq0, tq1, tq2 : std_logic_vector(9 downto 0);
+  -- HDMI audio
+  signal pcm       : std_logic_vector(11 downto 0);
+  signal aud_req   : std_logic;
+  signal aud_req_s : std_logic_vector(2 downto 0) := (others => '0');
+  signal aud_acc   : signed(20 downto 0) := (others => '0');
+  signal aud_avg   : signed(16 downto 0) := (others => '0');   -- sum / 16
+  signal aud_dc    : signed(24 downto 0) := (others => '0');   -- DC level, 8 fraction bits
+  signal aud_new   : std_logic := '0';
+  signal aud_smp   : std_logic_vector(15 downto 0) := (others => '0');
 
   signal led_sd : std_logic;
   -- flash wake-up and boot diagnostics
@@ -502,6 +516,7 @@ begin
       pVideoHS_n => vhs_n,
       pVideoVS_n => vvs_n,
       pAudio    => audio,
+      pAudioPcm => pcm,
       pDbg      => dbg,
       pDbgBus   => dbus
     );
@@ -528,17 +543,59 @@ begin
       vdp_hs_n => vhs_n, vdp_vs_n => vvs_n,
       clk_pix => clk_pix, rst_pix => pix_rst,
       hdmi_r => hr, hdmi_g => hg, hdmi_b => hb,
-      hdmi_hs => hhs, hdmi_vs => hvs, hdmi_de => hde, locked => hlocked);
+      hdmi_hs => hhs, hdmi_vs => hvs, hdmi_de => hde,
+      h_cnt => hcnt, v_cnt => vcnt, locked => hlocked);
 
-  u_hdmi : entity work.hdmi_module
+  -- HDMI audio sample: average of the sound over each 48 kHz period (450
+  -- clk21m), which also removes most of the aliasing. Held until the next
+  -- request: hdmi_tx reads it one request later.
+  -- The mix leaves headroom for all the chips at full volume and the PSG / SCC
+  -- are unipolar, so the DC is removed (high pass, 30 Hz) and the level is
+  -- multiplied by 4 (+12 dB) with saturation.
+  process(clk21m)
+    variable x : signed(11 downto 0);
+    variable y : signed(17 downto 0);
+  begin
+    if rising_edge(clk21m) then
+      x := signed((not pcm(11)) & pcm(10 downto 0));
+      aud_req_s <= aud_req_s(1 downto 0) & aud_req;
+      if aud_req_s(2) /= aud_req_s(1) then
+        aud_avg <= aud_acc(20 downto 4);
+        aud_acc <= resize(x, 21);
+      else
+        aud_acc <= aud_acc + x;
+      end if;
+      aud_new <= aud_req_s(2) xor aud_req_s(1);
+      if aud_new = '1' then
+        y := resize(aud_avg, 18) - resize(aud_dc(24 downto 8), 18);
+        aud_dc <= aud_dc + resize(y, 25);
+        -- y * 2 = average * 4, saturated
+        if y(17 downto 14) = "0000" or y(17 downto 14) = "1111" then
+          aud_smp <= std_logic_vector(y(14 downto 0)) & '0';
+        else
+          aud_smp <= (15 => y(17), others => not y(17));
+        end if;
+      end if;
+    end if;
+  end process;
+
+  hrgb <= hr & hg & hb;
+  u_tx : entity work.hdmi_tx
+    generic map (FULL => HDMI_FULL, H_TOT => 855, V_TOT => 524)
     port map (
-      vga_clk_x5 => clk135, vga_clk => clk_pix, rst => pix_rst,
-      vga_red_in => hr, vga_green_in => hg, vga_blue_in => hb,
-      vga_hsync_in => hhs, vga_vsync_in => hvs, vga_disp_ena_in => hde,
-      tmds_c0_p_out => tmds_d_p(0), tmds_c0_n_out => tmds_d_n(0),
-      tmds_c1_p_out => tmds_d_p(1), tmds_c1_n_out => tmds_d_n(1),
-      tmds_c2_p_out => tmds_d_p(2), tmds_c2_n_out => tmds_d_n(2),
-      tmds_ck_p_out => tmds_ck_p, tmds_ck_n_out => tmds_ck_n);
+      clk => clk_pix, h_cnt => hcnt, v_cnt => vcnt,
+      hs => hhs, vs => hvs, de => hde, rgb => hrgb,
+      audio_req => aud_req, audio => aud_smp,
+      q0 => tq0, q1 => tq1, q2 => tq2);
+
+  u_phy : entity work.hdmi_phy
+    port map (
+      clk_135 => clk135, clk_pix => clk_pix, lock => hdmi_lock,
+      q0 => tq0, q1 => tq1, q2 => tq2,
+      tmds_c0_p => tmds_d_p(0), tmds_c0_n => tmds_d_n(0),
+      tmds_c1_p => tmds_d_p(1), tmds_c1_n => tmds_d_n(1),
+      tmds_c2_p => tmds_d_p(2), tmds_c2_n => tmds_d_n(2),
+      tmds_ck_p => tmds_ck_p, tmds_ck_n => tmds_ck_n);
 
   ----------------------------------------------------------------
   -- LEDs (active low)

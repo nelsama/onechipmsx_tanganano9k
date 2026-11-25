@@ -52,31 +52,22 @@ end FeedbackMemory;
 architecture RTL of FeedbackMemory is
 
   type SIGNED_LI_ARRAY_TYPE is array (0 to MAXCH-1) of SIGNED_LI_VECTOR_TYPE;
-  signal data_array : SIGNED_LI_ARRAY_TYPE;
+  signal data_array : SIGNED_LI_ARRAY_TYPE := (others => (others => '0'));
   -- TN9K: synchronous read -> block RAM (saves LUT-RAM on the GW1NR-9)
   attribute syn_ramstyle : string;
   attribute syn_ramstyle of data_array : signal is "block_ram";
   
 begin
 
-  process(clk, reset)
-  
-    variable init_ch : integer range 0 to MAXCH;
+  process (clk)
     
   begin
   
-    if reset = '1' then
-    
-      init_ch := 0;
-  
-    elsif clk'event and clk='1' then
-    
-      if init_ch /= MAXCH then
-      
-        data_array(init_ch) <= (others=>'0');
-        init_ch := init_ch + 1;
-      
-      elsif wr='1' then
+    -- TN9K: not cleared on reset (power-on content is 0 and every slot is
+    -- rewritten on each pass); saves logic
+    if clk'event and clk = '1' then
+
+     if wr = '1' then
       
         data_array(waddr) <= CONV_SIGNED_LI_VECTOR(wdata);
         

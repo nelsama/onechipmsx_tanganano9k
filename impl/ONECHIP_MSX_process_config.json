@@ -53,7 +53,7 @@
     "Max_Fanout": 1000,
     "Multi_Boot": true,
     "Netlist_Hierarchy": true,
-    "OUTPUT_BASE_NAME": "tn9k_top",
+    "OUTPUT_BASE_NAME": "ONECHIP_MSX",
     "Optimization_Goal": "Auto",
     "POWER_ON_RESET_MONITOR": true,
     "PRINT_BSRAM_MODE": "Default Mode",

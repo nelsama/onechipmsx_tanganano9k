@@ -4,7 +4,7 @@
               ├─ emsx_core   MSX completo (Z80, VDP, PSG, SCC, OPLL, MegaSD, RTC)
               ├─ psram_msx   dos canales PSRAM, uno por die
               ├─ vdp2hdmi    VGA 31 kHz -> raster 720x480p
-              ├─ hdmi_*      codificación TMDS y serialización
+              ├─ hdmi_*      HDMI con audio (hdmi_tx) y serialización (hdmi_phy)
               └─ uart_kbd    teclado MSX por UART
 
 ## Relojes
@@ -89,6 +89,21 @@ juegos probados funcionan en la placa. `sim/mk_hr_test.py` reproduce el bucle.
 Una línea VGA del VDP (684 clk21m) dura exactamente 855 píxeles de 27 MHz, así
 que el raster HDMI (855 x 524 totales, 60,27 Hz) queda enganchado al VDP con un
 búfer de dos líneas, sin memoria de cuadro. PAL y entrelazado no se tratan.
+
+`hdmi_tx` añade los InfoFrames (VIC 2, 4:3) y el audio PCM de 48 kHz; la guía general es
+[09-HDMI-COMPLETO.md](09-HDMI-COMPLETO.md). Lo propio de este proyecto:
+
+- El barrido es de 855 x 524 en vez de 858 x 525 (genéricos `H_TOT` y `V_TOT`).
+  No es el 480p exacto de la norma: la CPU y el VDP no se pueden detener sin
+  alterar sus tiempos.
+- Los contadores salen de `vdp2hdmi` 2 ciclos antes que la imagen.
+- La muestra de audio es la media de la mezcla durante cada periodo de 48 kHz
+  (450 clk21m), tomada antes del PWM. El PWM sigue saliendo por los pines 77 y 76.
+- Al audio HDMI se le quita la continua (30 Hz) y se le aplica x4 (+12 dB) con
+  saturación; el PWM no cambia.
+- `HDMI_FULL = false` en `tn9k_top` vuelve a DVI (solo imagen).
+- Para que quepa: tabla de paquetes y seno del OPLL en BSRAM, codificador TMDS
+  reducido, y memorias de fase, realimentación y salida del OPLL sin borrado en el reset.
 
 ## Diferencias con el núcleo original
 

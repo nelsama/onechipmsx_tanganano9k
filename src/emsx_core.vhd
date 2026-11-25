@@ -110,6 +110,8 @@ entity emsx_core is
 
     -- Audio (1-bit PWM, needs an RC low-pass filter)
     pAudio      : out std_logic;
+    -- the same before the PWM: clk21m, unsigned, silence = 800h
+    pAudioPcm   : out std_logic_vector(11 downto 0);
 
     -- TN9K debug: address of the last opcode fetch (M1) & primary slot
     -- register (port A8h) & count of CPU writes to the VDP ports 98-9Bh
@@ -1168,6 +1170,7 @@ begin
   end process;
 
   pAudio <= DACout;
+  pAudioPcm <= DACin;
 
 
   -- TN9K: cassette interface removed (CMT input reads '0', as on turboR)

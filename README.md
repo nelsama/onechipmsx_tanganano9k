@@ -15,10 +15,10 @@ juegos, incluidos cartuchos con SCC.
 | Bloque | Estado |
 |---|---|
 | CPU | Z80 (T80) a 3,6 MHz, sin turbo |
-| Vídeo | VDP V9938, 128 KB de VRAM, HDMI 720x480p a 60 Hz (solo NTSC) |
+| Vídeo | VDP V9938, 128 KB de VRAM, HDMI 720x480p a 60 Hz con audio (solo NTSC) |
 | RAM | Mapper de 1 MB |
 | Cartucho | MegaRAM ESE-SCC de 512 KB en el slot 2 |
-| Sonido | PSG, SCC y MSX-MUSIC (YM2413); PWM mono |
+| Sonido | PSG, SCC y MSX-MUSIC (YM2413); mono por HDMI y PWM |
 | Almacenamiento | microSD en modo SPI, controlador MegaSD con MSX-DOS 2 |
 | Entrada | Joystick, teclado por UART (USB), teclado PS/2 |
 | Otros | Reloj RP5C01 sin batería, botones de reset |
@@ -27,8 +27,8 @@ La BIOS usada en las pruebas es MSX2+, pero el VDP **no** implementa los modos
 YJK (screens 10 a 12) ni el scroll horizontal R25-R27 del V9958: el hardware
 equivale a un MSX2.
 
-Uso de la FPGA (release): 8391 / 8640 lógica (97 %), 3776 / 6771 registros,
-24 / 26 BSRAM. Queda muy poco espacio para ampliaciones.
+Uso de la FPGA (release): 8503 / 8640 lógica (98 %), 3929 / 6771 registros,
+25 / 26 BSRAM, 4320 / 4320 CLS. No queda espacio para ampliaciones.
 
 ### Limitaciones conocidas
 
@@ -36,7 +36,7 @@ Uso de la FPGA (release): 8391 / 8640 lógica (97 %), 3776 / 6771 registros,
   teclado por UART tampoco está verificado.
 - La carga de la BIOS desde la SD está en el cargador, pero sin probar. Se ha
   usado siempre la flash externa.
-- Sin ROM de kanji, sin PAL, sin audio por HDMI, sin segundo joystick.
+- Sin ROM de kanji, sin PAL, sin segundo joystick.
 - MegaRAM de 512 KB: los juegos SCC de 2 MB no caben.
 - El reloj a 21,6 MHz va un 0,57 % más rápido que el original.
 
@@ -78,7 +78,7 @@ Con el IDE: abre `ONECHIP_MSX.gprj` y ejecuta *Run All*. Desde Git Bash:
 
 ```sh
 TOP=tn9k_top PNR=1 PLACE_OPT=1 bash tools/synth.sh tn9k_rel 9k
-# resultado: build/tn9k_rel/impl/pnr/tn9k_top.fs
+# resultado: build/tn9k_rel/impl/pnr/ONECHIP_MSX.fs
 ```
 
 La ruta de Gowin se cambia con la variable `GW_SH`. El bitstream probado en la
@@ -91,7 +91,7 @@ Son **dos memorias distintas** y hacen falta las dos. Con Gowin Programmer:
 | Qué | Dónde | Operación |
 |---|---|---|
 | Imagen de BIOS | Flash SPI externa | External Flash Mode, *exFlash C Bin Erase, Program*, dirección 0x000000 |
-| `tn9k_top.fs` | Flash interna de la FPGA | Embedded Flash Mode, *embFlash Erase, Program* |
+| `ONECHIP_MSX.fs` | Flash interna de la FPGA | Embedded Flash Mode, *embFlash Erase, Program* |
 
 El selector de archivos de *C Bin* puede pedir extensión `.bin`: copia
 `OCM-BIOS.DAT` como `ocm_bios.bin`.
@@ -100,7 +100,7 @@ Para probar sin grabar, carga el `.fs` en SRAM; se pierde al apagar.
 
 ### 4. Preparar la microSD
 
-Formato FAT16, 2 GB como máximo. En la raíz van al menos `MSXDOS2.SYS` y
+Formato FAT16 (no FAT32), 2 GB como máximo. En la raíz van al menos `MSXDOS2.SYS` y
 `COMMAND2.COM`. Para arrancar directamente en SofaRun, instalado en `\SR`:
 
 ```bat

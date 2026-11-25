@@ -47,31 +47,22 @@ end PhaseMemory;
 architecture RTL of PhaseMemory is
 
   type PHASE_ARRAY_TYPE is array (0 to MAXSLOT-1) of PHASE_TYPE;
-  signal phase_array : PHASE_ARRAY_TYPE;
+  signal phase_array : PHASE_ARRAY_TYPE := (others => (others => '0'));
   -- TN9K: synchronous read -> block RAM (saves LUT-RAM on the GW1NR-9)
   attribute syn_ramstyle : string;
   attribute syn_ramstyle of phase_array : signal is "block_ram";
 
 begin
 
-  process (clk, reset)
-
-    variable init_slot : integer range 0 to MAXSLOT;
+  process (clk)
 
   begin
   
-   if reset = '1' then
-    
-      init_slot := 0;
-      
-   elsif clk'event and clk = '1' then
+   -- TN9K: not cleared on reset (power-on content is 0 and every slot is
+   -- rewritten on each pass); saves logic
+   if clk'event and clk = '1' then
 
-     if init_slot /= MAXSLOT then
-     
-       phase_array(init_slot) <= (others=>'0');
-       init_slot := init_slot + 1;
-       
-     elsif memwr = '1' then
+     if memwr = '1' then
      
          phase_array(slot) <= memin;
          

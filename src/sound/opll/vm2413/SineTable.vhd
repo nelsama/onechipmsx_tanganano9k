@@ -31,6 +31,7 @@
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
 use IEEE.STD_LOGIC_UNSIGNED.ALL;
+use IEEE.STD_LOGIC_ARITH.CONV_STD_LOGIC_VECTOR;
 use WORK.VM2413.ALL;
 
 
@@ -89,39 +90,31 @@ architecture RTL of SineTable is
     "0000000","0000000","0000000","0000000"
   );
 
+  -- TN9K: table in a block ROM (same one clock latency); the half wave
+  -- (wf = '1') is sin_data(0), all ones, forced after the ROM
+  signal q   : DB_TYPE;
+  signal sgn, frc : std_logic;
+  attribute syn_romstyle : string;
+  attribute syn_romstyle of q : signal is "block_rom";
+
 begin
 
   process (clk)
-  begin  
-    if clk'event and clk = '1' then    
-    
-      if addr < TABLE_WIDTH then          
-      
-        data <= ( sign=>'0', value=>sin_data(addr) );   
-                  
-      elsif addr < TABLE_WIDTH * 2 then      
-      
-        data <= ( sign=>'0', value=>sin_data(TABLE_WIDTH * 2 - 1 - addr) );  
-              
-      elsif addr < TABLE_WIDTH * 3 then
-      
-        if wf = '0' then
-          data <= ( sign=>'1', value=>sin_data(addr - TABLE_WIDTH * 2));
-        else
-          data <= ( sign=>'1', value=>sin_data(0) );
-        end if ;
-        
-      else
-      
-        if wf = '0' then 
-          data <= ( sign=>'1', value=>sin_data( TABLE_WIDTH * 4 - 1 - addr));
-        else
-          data <= ( sign=>'1', value=>sin_data(0) );
-        end if;
-        
-      end if;        
-      
-    end if;        
+    variable a : std_logic_vector(8 downto 0);
+    variable i : std_logic_vector(6 downto 0);
+  begin
+    if clk'event and clk = '1' then
+      a := CONV_STD_LOGIC_VECTOR(addr, 9);
+      for k in 6 downto 0 loop
+        i(k) := a(k) xor a(7);
+      end loop;
+      q   <= sin_data(CONV_INTEGER(i));
+      sgn <= a(8);
+      frc <= a(8) and wf;
+    end if;
   end process;
+
+  data.sign  <= sgn;
+  data.value <= q when frc = '0' else (others => '1');
 
 end RTL;

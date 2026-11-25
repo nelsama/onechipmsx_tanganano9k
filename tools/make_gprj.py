@@ -66,7 +66,7 @@ cfg = {
     "MULTIBOOT_SPI_FLASH_ADDRESS": "00000000", "MULTIJUMP_ADDRESS_WIDTH": "24",
     "MULTIJUMP_MODE": "Single", "MULTIJUMP_SPI_FLASH_ADDRESS": "000000",
     "Map_Option": "1", "Max_Fanout": 1000, "Multi_Boot": True, "Netlist_Hierarchy": True,
-    "OUTPUT_BASE_NAME": TOP, "Optimization_Goal": "Auto", "POWER_ON_RESET_MONITOR": True,
+    "OUTPUT_BASE_NAME": NAME, "Optimization_Goal": "Auto", "POWER_ON_RESET_MONITOR": True,
     "PRINT_BSRAM_MODE": "Default Mode", "PRINT_BSRAM_VALUE": True,
     "PROGRAM_DONE_BYPASS": False, "PlaceInRegToIob": True, "PlaceIoRegToIob": True,
     "PlaceOutRegToIob": True, "Place_Option": "0", "Process_Configuration_Verion": "1.0",

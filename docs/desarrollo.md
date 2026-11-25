@@ -14,7 +14,7 @@
 | `CST`, `SDC` | Otros archivos de restricciones |
 | `GW_SH` | Ruta de `gw_sh.exe` |
 
-Con la FPGA al 97 %, revisa siempre setup y hold en el informe de timing. Si
+Con la FPGA al 99 %, revisa siempre setup y hold en el informe de timing. Si
 algo queda negativo, prueba otro `PLACE_OPT` (en una compilación de depuración
 corrigió un hold de -0,138 ns).
 
@@ -38,7 +38,7 @@ cada una con su `.cst` y `.sdc`.
 Carga en SRAM desde la línea de comandos, con `programmer_cli` de Gowin:
 
 ```
-programmer_cli.exe --device GW1NR-9C --run 2 --fsFile tn9k_top.fs
+programmer_cli.exe --device GW1NR-9C --run 2 --fsFile ONECHIP_MSX.fs
 ```
 
 A veces termina sin error pero la FPGA no toma el bitstream: verifica y repite.
@@ -63,6 +63,9 @@ PSRAM. `sim/check_vdp.sh` recorre todos los modos.
 
 **HDMI.** `bash sim/run_vdp2hdmi.sh` compara la salida píxel a píxel; necesita
 antes el volcado de referencia de la pantalla 5.
+
+`bash sim/hdmi/run.sh` decodifica los símbolos TMDS (imagen, paquetes y audio) con un
+receptor aparte, en Node; tarda unos 2 minutos. Debe dar `errores {}`, `malos 0` y `bad: 0`.
 
 **Sistema completo.** El segundo argumento es el tiempo simulado en ms:
 
