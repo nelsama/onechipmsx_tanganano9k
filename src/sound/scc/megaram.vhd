@@ -106,7 +106,10 @@ architecture rtl of megaram is
   -- TN9K: Brazilian (ACVS) MegaRAM mode. The first access to I/O port 8Eh
   -- turns it on until reset: IN (8Eh) enables writing the RAM, OUT (8Eh)
   -- goes back to "ROM" mode, where a write to 4000-5FFF / 6000-7FFF /
-  -- 8000-9FFF / A000-BFFF selects the 8 KB bank of that window. No SCC.
+  -- 8000-9FFF / A000-BFFF selects the 8 KB bank of that window. The SCC
+  -- stays at 9800-9FFF with bank 3Fh in 8000-9FFF (as on a Konami cartridge;
+  -- a MegaRAM is used for Konami SCC games). A write to the SCC+ mode
+  -- registers (7FFEh / BFFEh) in bank select mode goes back to ESE-SCC.
   signal MrMode      : std_logic;
   signal MrWrite     : std_logic;
 
@@ -182,17 +185,17 @@ begin
              (others => '1');
 
   -- SCC address decoder
-  SccSel <= "01" when   -- MegaRAM mode: RAM read, or write when enabled
+  SccSel <= "10" when   -- memory access (scc_wave_Lch)
+                        (adr(8) = '0' and SccModeB(4) = '0' and mapsel(0) = '0' and 
+                        (DecSccA = '1' or (DecSccB = '1' and MrMode = '0'))) else
+            "11" when   -- memory access (scc_wave_Rch)
+                        (adr(8) = '1' and SccModeB(4) = '0' and mapsel(0) = '0' and 
+                        (DecSccA = '1' or (DecSccB = '1' and MrMode = '0'))) else
+            "01" when   -- MegaRAM mode: RAM read, or write when enabled
                         (MrMode = '1' and (adr(15 downto 14) = "01" or adr(15 downto 14) = "10") and
                         (wrt = '0' or MrWrite = '1')) else
             "00" when   -- MegaRAM mode: bank register / unmapped
                         MrMode = '1' else
-            "10" when   -- memory access (scc_wave_Lch)
-                        (adr(8) = '0' and SccModeB(4) = '0' and mapsel(0) = '0' and 
-                        (DecSccA = '1' or DecSccB = '1')) else
-            "11" when   -- memory access (scc_wave_Rch)
-                        (adr(8) = '1' and SccModeB(4) = '0' and mapsel(0) = '0' and 
-                        (DecSccA = '1' or DecSccB = '1')) else
             "01" when   -- memory access (MEGA-ROM)
                         -- 4000-7FFFh(R/-, ASC8K/16K)
                         (adr(15 downto 14) = "01"  and mapsel(0) = '1'  and                     wrt = '0') or
@@ -258,7 +261,17 @@ begin
 
       if (MrMode = '1') then
 
-        if (req = '1' and SccSel = "00" and wrt = '1') then
+        if (req = '1' and SccSel = "00" and wrt = '1' and Dec1FFE = '1' and
+            (adr(15 downto 13) = "011" or adr(15 downto 13) = "101")) then
+          -- SCC+ mode register (7FFEh / BFFEh): back to ESE-SCC (a loader
+          -- probed port 8Eh, then uses the slot as an ESE-SCC)
+          MrMode <= '0';
+          if (adr(14) = '1') then
+            SccModeA <= dbo;
+          else
+            SccModeB <= dbo;
+          end if;
+        elsif (req = '1' and SccSel = "00" and wrt = '1') then
           case adr(15 downto 13) is
             when "010"  => SccBank0 <= dbo;
             when "011"  => SccBank1 <= dbo;

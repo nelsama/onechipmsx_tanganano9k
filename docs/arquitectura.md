@@ -70,8 +70,11 @@ La IPL-ROM original leía la flash desde 0x040000; está parcheada.
 El slot 2 es una ESE-SCC (SCC+). Los discos para la MegaRAM brasileña (ACVS)
 la controlan por el puerto de E/S 8Eh: `IN` habilita escribir la RAM, `OUT` vuelve
 al modo ROM, donde escribir en 4000h, 6000h, 8000h o A000h elige el banco de 8 KB
-de esa ventana. El primer acceso a 8Eh pone el slot en ese modo, sin SCC, hasta
-el reset. `sim/mk_acvs_test.py` lo prueba en la simulación del sistema.
+de esa ventana. El primer acceso a 8Eh pone el slot en ese modo hasta el reset.
+El SCC sigue en 9800h con el banco 3Fh en 8000h, como en un cartucho Konami.
+SofaRun usa el puerto 8Eh para detectar dispositivos aunque luego cargue en la
+ESE-SCC: escribir en 7FFEh o BFFEh (modo del SCC+) en modo de bancos devuelve el
+slot a ESE-SCC. `sim/mk_acvs_test.py` lo prueba en la simulación del sistema.
 
 ## VDP y latencia de VRAM
 
