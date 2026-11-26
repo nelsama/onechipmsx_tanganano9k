@@ -48,7 +48,7 @@ encender, para que un cartucho cargado sobreviva al reset.
 | 0-0 | BIOS principal |
 | 0-2 | FM-BIOS |
 | 1 | Vacío |
-| 2 | MegaRAM / ESE-SCC |
+| 2 | MegaRAM / ESE-SCC (y MegaRAM brasileña por el puerto 8Eh) |
 | 3-0 | Mapper |
 | 3-1 | SUB-ROM (página 0) y Kanji BASIC (páginas 1-2) |
 | 3-2 | MegaSD |
@@ -64,6 +64,14 @@ encender, para que un cartucho cargado sobreviva al reset.
 3. La copia a la ESE-RAM y salta a la BIOS principal.
 
 La IPL-ROM original leía la flash desde 0x040000; está parcheada.
+
+## MegaRAM brasileña
+
+El slot 2 es una ESE-SCC (SCC+). Los discos para la MegaRAM brasileña (ACVS)
+la controlan por el puerto de E/S 8Eh: `IN` habilita escribir la RAM, `OUT` vuelve
+al modo ROM, donde escribir en 4000h, 6000h, 8000h o A000h elige el banco de 8 KB
+de esa ventana. El primer acceso a 8Eh pone el slot en ese modo, sin SCC, hasta
+el reset. `sim/mk_acvs_test.py` lo prueba en la simulación del sistema.
 
 ## VDP y latencia de VRAM
 

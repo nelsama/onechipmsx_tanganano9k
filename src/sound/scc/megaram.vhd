@@ -53,6 +53,8 @@ entity megaram is
     ramdbo  : out std_logic_vector(7 downto 0);
 
     mapsel  : in std_logic_vector(1 downto 0);  -- "-0":SCC+, "01":ASC8K, "11":ASC16K
+    -- TN9K: I/O request to port 8Eh (Brazilian ACVS MegaRAM, see below)
+    io8e    : in std_logic := '0';
 
     wavl    : out std_logic_vector(7 downto 0);
     wavr    : out std_logic_vector(7 downto 0)
@@ -101,6 +103,13 @@ architecture rtl of megaram is
   signal SccAmpL     : std_logic_vector(7 downto 0);
   signal SccAmpR     : std_logic_vector(7 downto 0);
 
+  -- TN9K: Brazilian (ACVS) MegaRAM mode. The first access to I/O port 8Eh
+  -- turns it on until reset: IN (8Eh) enables writing the RAM, OUT (8Eh)
+  -- goes back to "ROM" mode, where a write to 4000-5FFF / 6000-7FFF /
+  -- 8000-9FFF / A000-BFFF selects the 8 KB bank of that window. No SCC.
+  signal MrMode      : std_logic;
+  signal MrWrite     : std_logic;
+
 begin
 
   ----------------------------------------------------------------
@@ -143,7 +152,8 @@ begin
   RamWrt  <= wrt;
 
   --ram address (MSB is fixed to '0' in 6000-7FFFh)
-  RamAdr(19)          <= SccModeA(6) when adr(14 downto 13) /= "11" and mapsel(0) = '0' else
+  RamAdr(19)          <= '0'         when MrMode = '1' else
+                         SccModeA(6) when adr(14 downto 13) /= "11" and mapsel(0) = '0' else
                          '0'         when                               mapsel(0) = '0' else
                          SccBank0(6) when adr(14 downto 13) = "10"   else
                          SccBank1(6) when adr(14 downto 13) = "11"   else
@@ -172,7 +182,12 @@ begin
              (others => '1');
 
   -- SCC address decoder
-  SccSel <= "10" when   -- memory access (scc_wave_Lch)
+  SccSel <= "01" when   -- MegaRAM mode: RAM read, or write when enabled
+                        (MrMode = '1' and (adr(15 downto 14) = "01" or adr(15 downto 14) = "10") and
+                        (wrt = '0' or MrWrite = '1')) else
+            "00" when   -- MegaRAM mode: bank register / unmapped
+                        MrMode = '1' else
+            "10" when   -- memory access (scc_wave_Lch)
                         (adr(8) = '0' and SccModeB(4) = '0' and mapsel(0) = '0' and 
                         (DecSccA = '1' or DecSccB = '1')) else
             "11" when   -- memory access (scc_wave_Rch)
@@ -231,10 +246,29 @@ begin
       SccBank3   <= X"03";
       SccModeA   <= (others => '0');
       SccModeB   <= (others => '0');
+      MrMode     <= '0';
+      MrWrite    <= '0';
 
     elsif (clk21m'event and clk21m = '1') then
 
-      if (mapsel(0) = '0') then
+      if (io8e = '1') then
+        MrMode  <= '1';
+        MrWrite <= not wrt;
+      end if;
+
+      if (MrMode = '1') then
+
+        if (req = '1' and SccSel = "00" and wrt = '1') then
+          case adr(15 downto 13) is
+            when "010"  => SccBank0 <= dbo;
+            when "011"  => SccBank1 <= dbo;
+            when "100"  => SccBank2 <= dbo;
+            when "101"  => SccBank3 <= dbo;
+            when others => null;
+          end case;
+        end if;
+
+      elsif (mapsel(0) = '0') then
 
         -- Mapped I/O port access on 5000-57FFh ... Bank register write
         if (req = '1' and SccSel = "00" and wrt = '1' and adr(15 downto 11) = "01010" and 

@@ -345,6 +345,7 @@ architecture rtl of emsx_core is
       ramdbo  : out std_logic_vector(7 downto 0);
 
       mapsel  : in std_logic_vector(1 downto 0);  -- "0-":SCC+, "10":ASC8K, "11":ASC16K
+      io8e    : in std_logic;
 
       wavl    : out std_logic_vector(7 downto 0);
       wavr    : out std_logic_vector(7 downto 0)
@@ -573,6 +574,7 @@ architecture rtl of emsx_core is
   signal SccDbo      : std_logic_vector(7 downto 0);
   signal SccAmpL     : std_logic_vector(7 downto 0);
   signal SccAmpR     : std_logic_vector(7 downto 0);
+  signal Io8eReq     : std_logic;
 
   -- Opll signals
   signal OpllReq     : std_logic;
@@ -1058,6 +1060,7 @@ begin
   MapReq <= req when mem = '0' and adr(7 downto 2) = "111111" else      -- I/O:FC-FFh / Memory-mapper
             req when mem = '1' and iSltMap = '1'              else '0'; -- MEM        / Memory-mapper
   SccReq <= req when mem = '1' and iSltScc = '1'              else '0'; -- MEM:       / ESE-SCC
+  Io8eReq<= req when mem = '0' and adr(7 downto 0) = X"8E"     else '0'; -- I/O:8Eh    / MegaRAM (TN9K)
   ErmReq <= req when mem = '1' and iSltErm = '1'              else '0'; -- MEM:       / ESE-RAM, MegaSD
   RtcReq <= req when mem = '0' and adr(7 downto 1) = "1011010" else '0';-- I/O:B4-B5h / RTC(RP-5C01)
 
@@ -1390,7 +1393,7 @@ begin
   G_SCC : if ENABLE_SCC generate
     U31 : megaram
       port map(clk21m, reset, clkena, SccReq, SccAck, wrt, adr, SccDbi, dbo,
-               SccRam, SccWrt, SccAdr, RamDbi, SccDbo, MegType, SccAmpL, SccAmpR);
+               SccRam, SccWrt, SccAdr, RamDbi, SccDbo, MegType, Io8eReq, SccAmpL, SccAmpR);
   end generate;
   G_NO_SCC : if not ENABLE_SCC generate
     -- MegType is forced to "00", so slot 2 is never decoded as SCC

@@ -85,6 +85,12 @@ architecture rtl of rtc is
   signal Reg1224     : std_logic_vector(7 downto 0);
   signal RegLeap     : std_logic_vector(7 downto 0);
 
+  type RtcMem_t is array (0 to 63) of std_logic_vector(7 downto 0);
+  signal RtcMem      : RtcMem_t;
+  signal MemAdrR     : std_logic_vector(5 downto 0);
+  attribute syn_ramstyle : string;
+  attribute syn_ramstyle of RtcMem : signal is "block_ram";
+
 begin
 
   ----------------------------------------------------------------
@@ -279,6 +285,17 @@ begin
   MemAdr <= "00" & RegMode(1 downto 0) & RtcRegPtr;
   MemWe  <= wrt when req = '1' and ireq = '0' and adr(0) = '1' else '0';
   ack    <= ireq;
-  Mem : ram port map(MemAdr, clk21m, MemWe, dbo, oMemDat);
+  -- TN9K: the RAM inline, in a block RAM (as the "ram" entity it was put in
+  -- LUT RAM, ~70 of logic); same behaviour: registered address
+  process(clk21m)
+  begin
+    if (clk21m'event and clk21m = '1') then
+      if (MemWe = '1') then
+        RtcMem(conv_integer(MemAdr(5 downto 0))) <= dbo;
+      end if;
+      MemAdrR <= MemAdr(5 downto 0);
+    end if;
+  end process;
+  oMemDat <= RtcMem(conv_integer(MemAdrR));
 
 end rtl;

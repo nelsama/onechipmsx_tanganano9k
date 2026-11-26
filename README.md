@@ -17,7 +17,7 @@ juegos, incluidos cartuchos con SCC.
 | CPU | Z80 (T80) a 3,6 MHz, sin turbo |
 | Vídeo | VDP V9938, 128 KB de VRAM, HDMI 720x480p a 60 Hz con audio (solo NTSC) |
 | RAM | Mapper de 1 MB |
-| Cartucho | MegaRAM ESE-SCC de 512 KB en el slot 2 |
+| Cartucho | MegaRAM ESE-SCC de 512 KB en el slot 2; también MegaRAM brasileña (puerto 8Eh) |
 | Sonido | PSG, SCC y MSX-MUSIC (YM2413); mono por HDMI y PWM |
 | Almacenamiento | microSD en modo SPI, controlador MegaSD con MSX-DOS 2 |
 | Entrada | Joystick, teclado por UART (USB), teclado PS/2 |
@@ -27,8 +27,8 @@ La BIOS usada en las pruebas es MSX2+, pero el VDP **no** implementa los modos
 YJK (screens 10 a 12) ni el scroll horizontal R25-R27 del V9958: el hardware
 equivale a un MSX2.
 
-Uso de la FPGA (release): 8503 / 8640 lógica (98 %), 3929 / 6771 registros,
-25 / 26 BSRAM, 4320 / 4320 CLS. No queda espacio para ampliaciones.
+Uso de la FPGA (release): 8480 / 8640 lógica (98 %), 3925 / 6771 registros,
+26 / 26 BSRAM, 4318 / 4320 CLS. No queda espacio para ampliaciones.
 
 ### Limitaciones conocidas
 

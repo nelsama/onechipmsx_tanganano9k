@@ -86,7 +86,8 @@ python sim/mk_hr_test.py build/sim/hr_test.bin
 FASTBOOT=1 PCTIME=22 bash sim/run_sys.sh build/sim/hr_test.bin 9
 ```
 
-La primera debe dar 00 en C000-C005 y A5 en C00F. En la segunda el bucle debe
+La primera debe dar 00 en C000-C005 y A5 en C00F. `sim/mk_acvs_test.py` (MegaRAM
+brasileña) se usa igual y da el mismo resultado. En la segunda el bucle debe
 durar 222 clk21m (37 T).
 
 ## Convenciones
